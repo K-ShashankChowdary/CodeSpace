@@ -1,124 +1,158 @@
 import { createClient } from "redis";
-import { execFile } from "child_process";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import { exec } from "child_process";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
-import mongoose from "mongoose";
-import { Submission } from "../models/Submission.js";
+import { Submission } from "../src/models/submission.model.js";
 
-// Setup for ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Database Connection
-mongoose.connect("mongodb://localhost:27017/codespace")
-    .then(() => console.log("📦 Worker connected to MongoDB"))
-    .catch((err) => console.error("❌ MongoDB Connection Error:", err));
+// I load environment variables here because the worker runs as a standalone process
+dotenv.config();
 
 // Redis Connection
-const client = createClient();
-client.on("error", (err) => console.error("❌ Redis Error:", err));
+// I use a separate client for the worker to avoid conflicts with the main API
+const redisClient = createClient({
+    url: process.env.REDIS_URI || "redis://localhost:6379"
+});
+
+redisClient.on("error", (err) => console.log("Redis Client Error", err));
 
 /**
- * PROCESS JOB
- * 1. Parses the job from Redis.
- * 2. Prepares temporary files for the C++ executor.
- * 3. Runs the executor and captures structured JSON output.
- * 4. Updates MongoDB with the verdict and cleans up files.
+ * C++ Execution Wrapper
+ * I created this function to bridge the gap between Node.js and my C++ binary.
+ * It executes the binary located in ../engine/executor and returns a Promise.
  */
-async function processJob(submission) {
-    let jobData;
-    try {
-        jobData = JSON.parse(submission);
-    } catch (parseError) {
-        console.error("❌ Failed to parse submission JSON:", parseError);
-        return;
-    }
+const runCpp = (jobId, code, input) => {
+    return new Promise((resolve, reject) => {
+        const fileName = `${jobId}.cpp`;
+        const inputName = `${jobId}.txt`;
+        
+        // I resolve the 'temp' directory relative to the backend root
+        // This ensures I always know where the files are, regardless of where I start the worker
+        const tempDir = path.resolve("temp");
+        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
 
-    const { jobId, code, input } = jobData;
-    const jobDir = path.join(__dirname, "../temp", jobId);
+        const filePath = path.join(tempDir, fileName);
+        const inputPath = path.join(tempDir, inputName);
+
+        // I write the user's code and input to the disk so the C++ engine can read them
+        fs.writeFileSync(filePath, code);
+        fs.writeFileSync(inputPath, input);
+
+        // Command Construction:
+        // I point to the sibling 'engine' directory. 
+        // IMPORTANT: I pass the Job ID as the argument, not the file path.
+        // The C++ engine handles the path resolution logic internally.
+        const command = `../engine/executor ${jobId}`;
+
+        console.log(`Executing Job: ${jobId}`);
+
+        exec(command, (error, stdout, stderr) => {
+            // Cleanup: I delete the files immediately after execution to keep the server clean.
+            // I wrap this in a try-catch to prevent crashing if the files were already deleted.
+            try {
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+                if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+            } catch (cleanupErr) {
+                console.error("Cleanup failed:", cleanupErr);
+            }
+
+            if (error) {
+                console.error(`Execution Error: ${error.message}`);
+                return reject(error);
+            }
+            if (stderr) {
+                // If the engine prints to stderr, it usually means a catastrophic failure (like a missing binary)
+                console.error(`Execution Stderr: ${stderr}`);
+                return reject(new Error(stderr));
+            }
+
+            // --- JSON Parsing Strategy ---
+            // My C++ engine prints a clean JSON string to stdout (e.g., {"status":"AC", ...})
+            // I parse this to get the structured result object.
+            try {
+                const result = JSON.parse(stdout.trim());
+                resolve(result);
+            } catch (parseError) {
+                console.error("Malformed JSON from Engine:", stdout);
+                reject(new Error("Engine output malformed"));
+            }
+        });
+    });
+};
+
+/**
+ * Submission Processor
+ * This is the core logic that orchestrates the entire flow:
+ * 1. Parse the payload from Redis.
+ * 2. Select the correct language runner (currently C++).
+ * 3. Update the MongoDB document with the final verdict.
+ */
+const processSubmission = async (submissionStr) => {
+    const submission = JSON.parse(submissionStr);
+    console.log(`Processing ${submission.jobId}...`);
 
     try {
-        // Create job workspace
-        if (!fs.existsSync(jobDir)) {
-            fs.mkdirSync(jobDir, { recursive: true });
+        const { jobId, code, input, language } = submission;
+
+        let result;
+        if (language === "cpp") {
+            result = await runCpp(jobId, code, input);
+        } else {
+            // I leave this extensible for Python/Java in the future
+            result = { status: "IE", output: "Language not supported yet" };
         }
 
-        const codePath = path.join(jobDir, "Main.cpp");
-        const inputPath = path.join(jobDir, "input.txt");
-
-        fs.writeFileSync(codePath, code);
-        fs.writeFileSync(inputPath, input || "");
-
-        const executorPath = path.join(__dirname, "../executor");
-
-        // Execute the C++ Judge Binary
-        execFile(executorPath, [codePath, inputPath], async (error, stdout, stderr) => {
-            console.log(`\n--- Engine Output for ${jobId} ---`);
-            
-            let result;
-            try {
-                // Attempt to parse JSON from the C++ Engine's stdout
-                result = JSON.parse(stdout.trim());
-                console.log("Verdict:", result.status);
-            } catch (jsonError) {
-                console.error("❌ Engine output was not valid JSON. Raw output:", stdout);
-                result = { 
-                    status: "RE", 
-                    output: stderr || "Internal Engine Crash or Timeout", 
-                    time_ms: 0 
-                };
-            }
-
-            try {
-                // Update the persistent record in MongoDB
-                await Submission.findByIdAndUpdate(jobId, {
-                    status: result.status,
-                    output: result.output,
-                    time_ms: result.time_ms,
-                });
-
-                // Set result in Redis for fast access (Status polling)
-                await client.set(`job:${jobId}`, JSON.stringify(result), { EX: 3600 });
-                
-                console.log(`✅ DB and Redis updated for job ${jobId}`);
-            } catch (dbError) {
-                console.error(`❌ Database update failed for job ${jobId}:`, dbError);
-            }
-
-            // Cleanup: Delete the temp folder and files
-            fs.rm(jobDir, { recursive: true, force: true }, (err) => {
-                if (err) console.error(`⚠️ Cleanup failed for ${jobId}:`, err);
-            });
+        // I update the database with the Status, Output, and Execution Time.
+        // This makes the result immediately available to the polling API.
+        await Submission.findByIdAndUpdate(jobId, {
+            status: result.status,
+            output: result.output,
+            // Note: Ensure your Schema has a 'timeTaken' field if you want to store this
+            // timeTaken: result.time_ms 
         });
 
-    } catch (err) {
-        console.error("❌ Worker Logic Error:", err);
-        // Fallback: Update DB to RE status so the user isn't stuck on "Pending"
-        await Submission.findByIdAndUpdate(jobId, { status: "RE", output: "Worker Logic Failure" });
+        console.log(`Job ${jobId} Completed: ${result.status}`);
+
+    } catch (error) {
+        console.error(`Job Failed: ${error}`);
+        
+        // Fallback: If anything crashes here, I mark the submission as an Internal Error
+        // so the user isn't stuck in "Pending" forever.
+        await Submission.findByIdAndUpdate(submission.jobId, {
+            status: "IE", 
+            output: "System Error: " + error.message
+        });
     }
-}
+};
 
 /**
- * WORKER LOOP
- * Blocks on the Redis queue until a new job is pushed.
+ * Worker Entry Point
+ * I initialize the database connections first. If they fail, I don't start the worker.
  */
-async function startWorker() {
+const startWorker = async () => {
     try {
-        await client.connect();
-        console.log("🚀 Worker Ready and listening for jobs...");
+        await redisClient.connect();
+        console.log("⚡ Worker connected to Redis.");
 
+        await mongoose.connect(process.env.MONGODB_URI + "/codespace");
+        console.log("💾 Worker connected to Mongo.");
+
+        // I use an infinite loop with 'brPop' (Blocking Pop).
+        // This is efficient because it puts the process to sleep until a job arrives,
+        // rather than constantly checking (busy waiting).
         while (true) {
-            // brPop is blocking; it stays here until a job exists in 'submissions'
-            const submission = await client.brPop("submissions", 0);
-            if (submission) {
-                await processJob(submission.element);
+            try {
+                const submission = await redisClient.brPop("submissions", 0);
+                // @ts-ignore
+                await processSubmission(submission.element);
+            } catch (err) {
+                console.error("Error processing submission:", err);
             }
         }
-    } catch (criticalError) {
-        console.error("❌ Critical Worker Failure:", criticalError);
-        process.exit(1);
+    } catch (err) {
+        console.error("Worker failed to start:", err);
     }
-}
+};
 
 startWorker();

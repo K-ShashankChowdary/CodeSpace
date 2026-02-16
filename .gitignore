@@ -41,3 +41,8 @@ db/
 .idea/
 *.swp
 *.swo
+
+node_modules/
+.env
+backend/temp/
+engine/executor
