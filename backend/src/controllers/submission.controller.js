@@ -34,13 +34,13 @@ const submitCode = asyncHandler(async (req, res) => {
         status: "Pending"
     });
 
-    // Prepare Redis Payload
-    // We send the 'input' from the first test case for the worker to execute against
+    // Redis Payload
     const payload = JSON.stringify({
         jobId: submission._id.toString(),
         code,
-        input: problem.testCases[0]?.input || "",
-        language
+        language,
+        input: problem.testCases[0].input,
+        expectedOutput: problem.testCases[0].output 
     });
 
     // Push to Queue

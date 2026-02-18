@@ -15,12 +15,8 @@ using namespace std::chrono;
 /**
  * My Container Configuration
  * I defined these constants to strictly limit what the user code can do.
- * * IMAGE: The isolated sandbox environment (my Docker image).
- * MAX_OUTPUT_SIZE: I limit this to 10KB to prevent memory attacks via massive stdout spam.
- * MEM_LIMIT: Hard RAM cap. I set this equal to swap to strictly kill processes that exceed it.
- * CPU_LIMIT: 0.5 means the container gets 50% of a single core.
- * PID_LIMIT: I set this to 64 to prevent fork bombs from crashing my host machine.
- * TIME_LIMIT: The hard wall-clock limit for the entire execution.
+ * MEM_LIMIT: I set this to 256MB.
+ * THRESHOLD_MS: I use 3500ms. If a process is killed (137) before this, it's MLE. After, it's TLE.
  */
 const string IMAGE = "cpp-runner";
 const int MAX_OUTPUT_SIZE = 10000;   
@@ -28,22 +24,20 @@ const string MEM_LIMIT = "256m";
 const string CPU_LIMIT = "0.5";      
 const string PID_LIMIT = "64";       
 const string TIME_LIMIT = "4s";      
-const int THRESHOLD_MS = 3800;       // I use this buffer to differentiate between a strict Timeout and a Runtime hang.
+const int THRESHOLD_MS = 3500;       
 
-// I need a global file pointer here so my cleanup handler can access it
 FILE* current_pipe = nullptr;
 
 /**
  * Signal Handler
- * If my executor gets killed (SIGINT/SIGTERM), I need to ensure the pipe 
- * to the shell is closed properly to avoid zombie processes.
+ * I need to ensure the pipe to the shell is closed if the executor itself is interrupted.
  */
 void cleanup(int signum) {
     if (current_pipe) pclose(current_pipe);
     exit(signum);
 }
 
-// Helper to escape special characters for valid JSON output
+// I use this to make sure stdout from the container doesn't break my JSON response
 string json_escape(const string &input) {
     string output = "";
     for (char c : input) {
@@ -57,46 +51,41 @@ string json_escape(const string &input) {
 }
 
 int main(int argc, char *argv[]) {
-    // I register my signal handlers immediately
     signal(SIGINT, cleanup);
     signal(SIGTERM, cleanup);
 
-    // I expect the Job ID to be passed as the first argument
-    if (argc < 2) {
-        cout << "{\"status\":\"IE\",\"output\":\"INTERNAL: No Job ID provided\"}" << endl;
+    // I now expect TWO arguments: Job ID and the Absolute Path to the temp directory
+    if (argc < 3) {
+        cout << "{\"status\":\"IE\",\"output\":\"INTERNAL: Missing Job ID or Temp Path\"}" << endl;
         return 1;
     }
 
     try {
-        // --- Path Resolution Logic ---
-        // The Worker only gives me the Job ID (e.g. "6993..."). 
-        // I need to manually construct the absolute paths because I am running from the backend root.
         string jobId = argv[1];
+        string pathArg = argv[2]; 
         
-        // I resolve 'temp' relative to where I am executed (backend/)
-        fs::path tempDir = fs::absolute("temp"); 
+        // I use the path provided by Node.js to avoid "No such file" errors
+        fs::path tempDir(pathArg); 
         fs::path codePath = tempDir / (jobId + ".cpp");
         fs::path inputPath = tempDir / (jobId + ".txt");
         
-        // Since I'm on Mac, I use 'gtimeout'. I'll change this to 'timeout' when I deploy to Linux.
-        string timeoutCmd = "gtimeout"; 
+        // I use gtimeout for Mac compatibility; I'll swap to 'timeout' on Linux later
+        #ifdef __APPLE__
+            string timeoutCmd = "gtimeout"; 
+        #else
+            string timeoutCmd = "timeout";
+        #endif
         
-        // Inside the container, I mount the host's 'temp' to '/app'.
-        // So I compile the file (named after the ID) and run the output binary.
+        // I check if the input file exists on the host before telling Docker to use it
         string dockerRunCmd = "./r";
-        
-        // I only redirect stdin if the input file actually exists
         if (fs::exists(inputPath)) {
             dockerRunCmd += " < " + jobId + ".txt";
         }
 
         /**
          * My Execution Command Construction:
-         * 1. --init: I use this to reap zombie processes inside the container.
-         * 2. --cpus: I enforce the hardware CPU limit.
-         * 3. --stop-timeout: I force Docker to kill the container 1s after the timeout command triggers.
-         * 4. --network none: I disable all networking for security.
-         * 5. -v: This is the critical part where I map my host temp dir to the container.
+         * I mount the host temp directory to /app and run the compiler + binary in one go.
+         * I redirect 2>&1 so I can catch compilation errors and runtime crashes in the same buffer.
          */
         string cmd = timeoutCmd + " -k 1s " + TIME_LIMIT + " docker run --rm --init " +
                      "--cpus=\"" + CPU_LIMIT + "\" " +
@@ -108,16 +97,12 @@ int main(int argc, char *argv[]) {
                      jobId + ".cpp -o r && " + dockerRunCmd + "\" 2>&1";
 
         auto start = high_resolution_clock::now();
-        
-        // I execute the command and open a pipe to read its stdout
         current_pipe = popen(cmd.c_str(), "r");
         
         if (!current_pipe) throw runtime_error("Pipe failed");
 
         string raw_out;
         array<char, 128> buf;
-        
-        // I read the output in chunks, respecting my max output size limit
         while (fgets(buf.data(), buf.size(), current_pipe)) {
             if (raw_out.size() < MAX_OUTPUT_SIZE) raw_out += buf.data();
         }
@@ -125,7 +110,6 @@ int main(int argc, char *argv[]) {
         int pclose_status = pclose(current_pipe);
         current_pipe = nullptr; 
         
-        // I extract the actual exit code from the process
         int exit_code = WEXITSTATUS(pclose_status);
         auto end = high_resolution_clock::now();
         long duration = duration_cast<milliseconds>(end - start).count();
@@ -133,13 +117,15 @@ int main(int argc, char *argv[]) {
         // --- Verdict Determination Logic ---
         string status = "AC";
         
-        // 124 is the exit code for timeout. 137 is SIGKILL (usually OOM).
-        if (exit_code == 124 || (exit_code == 137 && duration > THRESHOLD_MS)) {
+        // 124: gtimeout killed it.
+        // 137: Docker/Kernel killed it (SIGKILL).
+        if (exit_code == 124) {
             status = "TLE";
         } else if (exit_code == 137) {
-            status = "MLE";
+            // If it died instantly (< 3.5s), it's OOM (MLE). Otherwise, it's a timeout.
+            if (duration < THRESHOLD_MS) status = "MLE";
+            else status = "TLE";
         } else if (exit_code != 0) {
-            // I check for compiler errors by looking for standard gcc error keywords
             if (raw_out.find("error:") != string::npos || raw_out.find("fatal error:") != string::npos) {
                 status = "CE";
             } else {
@@ -147,7 +133,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // I print the final result as a clean JSON string for the Node.js worker to parse
+        // Final output for my Node.js worker
         cout << "{"
              << "\"status\":\"" << status << "\","
              << "\"time_ms\":" << duration << ","
@@ -155,7 +141,6 @@ int main(int argc, char *argv[]) {
              << "}" << endl;
 
     } catch (...) {
-        // Catch-all for any internal engine crashes
         cout << "{\"status\":\"IE\",\"output\":\"INTERNAL: Engine Exception\"}" << endl;
     }
     return 0;
