@@ -10,9 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/vite": "^4.1.18",
+    "axios": "^1.13.5",
+    "lucide-react": "^0.575.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-resizable-panels": "^4.6.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
