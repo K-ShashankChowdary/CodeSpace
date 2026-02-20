@@ -2,14 +2,13 @@ import React from "react";
 import Editor from "@monaco-editor/react";
 
 const CodeEditor = ({ code, setCode, language = "cpp" }) => {
-  
-  // Customizing the editor's appearance and behavior
+  // I am setting up the editor options to make it look clean and behave like VS Code
   const editorOptions = {
     fontSize: 16,
     fontFamily: "'Fira Code', 'JetBrains Mono', monospace",
-    minimap: { enabled: false }, // Disabling minimap for a cleaner look
+    minimap: { enabled: false },
     scrollBeyondLastLine: false,
-    automaticLayout: true, // Auto-resizes when the container changes
+    automaticLayout: true,
     padding: { top: 16, bottom: 16 },
     cursorSmoothCaretAnimation: "on",
     cursorBlinking: "expand",
@@ -19,6 +18,7 @@ const CodeEditor = ({ code, setCode, language = "cpp" }) => {
   };
 
   const handleEditorChange = (value) => {
+    // I update the parent component's state whenever the user types
     setCode(value);
   };
 
@@ -26,7 +26,7 @@ const CodeEditor = ({ code, setCode, language = "cpp" }) => {
     <div className="h-full w-full border border-[#3e3e3e] rounded-lg overflow-hidden shadow-2xl">
       <Editor
         height="100%"
-        theme="vs-dark" // VS Code Dark Theme
+        theme="vs-dark"
         defaultLanguage={language}
         defaultValue={code}
         onChange={handleEditorChange}

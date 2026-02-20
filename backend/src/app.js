@@ -1,42 +1,26 @@
-import express from "express";
-import cors from "cors";
-import { ApiError } from "./utils/ApiError.js"; // <--- ADD THIS LINE
+import express from 'express';
+import cors from 'cors';
+import submissionRoutes from './routes/submission.routes.js'; 
 
 const app = express();
 
-// Middleware Configuration
+// I strictly define the frontend origin to bypass the browser's CORS block
 app.use(cors({
-    origin: process.env.CORS_ORIGIN,
-    credentials: true
+    origin: 'http://localhost:5173',
+    credentials: true,
 }));
 
-app.use(express.json({ limit: "16kb" }));
-app.use(express.urlencoded({ extended: true, limit: "16kb" }));
-app.use(express.static("public"));
+// I configure middlewares for parsing data
+app.use(express.json({ limit: '16kb' }));
+app.use(express.urlencoded({ extended: true, limit: '16kb' }));
 
-// --- ROUTES ---
-import submissionRouter from "./routes/submission.routes.js";
-// import problemRouter from "./routes/problem.routes.js"; // Uncomment if you added this
+// I mount the submission routes
+app.use('/api/v1/submissions', submissionRoutes);
 
-// Mount routes
-app.use("/api/v1/submissions", submissionRouter);
-// app.use("/api/v1/problems", problemRouter);
-
-// Global Error Handler
+// I use a global error handler to catch async errors cleanly
 app.use((err, req, res, next) => {
-    // Now this line works because ApiError is imported!
-    if (err instanceof ApiError) {
-        return res.status(err.statusCode).json({
-            success: false,
-            message: err.message,
-            errors: err.errors
-        });
-    }
-    // Fallback for unexpected errors
-    return res.status(500).json({
-        success: false,
-        message: "Internal Server Error"
-    });
+    console.error(err.stack);
+    res.status(500).json({ success: false, message: err.message || 'Internal Server Error' });
 });
 
 export { app };
