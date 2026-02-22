@@ -1,155 +1,454 @@
-import React, { useState, useRef } from 'react';
-import axios from 'axios';
-import CodeEditor from '../components/CodeEditor';
+import React, { useState, useRef, useEffect } from "react";
+import axios from "axios";
+import { useNavigate, useParams } from "react-router-dom";
+import CodeEditor from "../components/CodeEditor";
 
 function IDE() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+
+  const [problem, setProblem] = useState(null);
+  const [isFetchingProblem, setIsFetchingProblem] = useState(true);
+  const [activeTab, setActiveTab] = useState("description");
+  const [history, setHistory] = useState([]);
+  const [activeTestCase, setActiveTestCase] = useState(0);
+
   const [code, setCode] = useState(
-    `#include <iostream>\nusing namespace std;\n\nint main() {\n    int a, b;\n    cin >> a >> b;\n    cout << a + b;\n    return 0;\n}`
+    `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n \n \treturn 0;\n}`,
   );
-  
-  const [output, setOutput] = useState('');
-  const [status, setStatus] = useState('Idle');
-  const [isLoading, setIsLoading] = useState(false);
-  
+
+  const [output, setOutput] = useState("");
+  const [status, setStatus] = useState("Idle");
+  const [isRunning, setIsRunning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const pollingIntervalRef = useRef(null);
-  const PROBLEM_ID = "6998822092eb5ea77d4f1448"; 
+
+  useEffect(() => {
+    const fetchProblem = async () => {
+      try {
+        const response = await axios.get(
+          `http://localhost:5000/api/v1/problems/${id}`,
+        );
+        setProblem(response.data.data || null);
+      } catch (error) {
+        navigate("/");
+      } finally {
+        setIsFetchingProblem(false);
+      }
+    };
+    fetchProblem();
+  }, [id, navigate]);
+
+  useEffect(() => {
+    if (activeTab === "submissions") {
+      fetchHistory();
+    }
+  }, [activeTab]);
+
+  const fetchHistory = async () => {
+    try {
+      const response = await axios.get(
+        `http://localhost:5000/api/v1/submissions/history/${id}`,
+      );
+      setHistory(Array.isArray(response.data.data) ? response.data.data : []);
+    } catch (error) {
+      setHistory([]);
+    }
+  };
 
   const handleLogout = async () => {
     try {
-      // I post to the logout endpoint to clear the HTTP-only JWT cookies
-      await axios.post('http://localhost:5000/api/v1/users/logout');
-      
-      // I force a hard reload to clear React state and redirect to the auth page safely
-      window.location.href = '/auth';
-    } catch (error) {
-      console.error('Logout failed', error);
-    }
+      await axios.post("http://localhost:5000/api/v1/users/logout");
+      window.location.href = "/auth";
+    } catch (error) {}
   };
 
-  const handleRunCode = async () => {
+  const handleExecution = async (type) => {
     if (!code.trim()) return;
+    type === "run" ? setIsRunning(true) : setIsSubmitting(true);
 
-    setIsLoading(true);
-    setStatus('Queued');
-    setOutput('Sending to server...');
+    setStatus("Queued");
+    setOutput("Processing...");
+    setActiveTab("description");
+    setActiveTestCase(0);
 
     try {
-      // I send the user code to the backend for execution queue placement
-      const response = await axios.post('http://localhost:5000/api/v1/submissions/submit', {
-        problemId: PROBLEM_ID,
-        language: 'cpp',
-        code: code
-      });
-
-      const jobId = response.data.data.jobId;
-      pollJobStatus(jobId);
+      const response = await axios.post(
+        "http://localhost:5000/api/v1/submissions/submit",
+        {
+          problemId: id,
+          language: "cpp",
+          code: code,
+          executionType: type,
+        },
+      );
+      pollJobStatus(response.data.data.jobId, type);
     } catch (error) {
-      console.error(error);
-      if (error.response?.status === 401) {
-        // I force a hard reload if the token expired during an active session
-        window.location.href = '/auth';
-      } else {
-        setStatus('System Error');
-        setOutput(error.response?.data?.message || 'Failed to connect to backend.');
-      }
-      setIsLoading(false);
+      setStatus("Error");
+      setIsRunning(false);
+      setIsSubmitting(false);
     }
   };
 
-  const pollJobStatus = (jobId) => {
+  const pollJobStatus = (jobId, type) => {
     if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
 
     pollingIntervalRef.current = setInterval(async () => {
       try {
-        const response = await axios.get(`http://localhost:5000/api/v1/submissions/status/${jobId}`);
+        const response = await axios.get(
+          `http://localhost:5000/api/v1/submissions/status/${jobId}`,
+        );
         const jobData = response.data.data;
 
-        if (jobData.status !== 'Pending') {
+        if (
+          jobData &&
+          jobData.status !== "Pending" &&
+          jobData.status !== "Executing"
+        ) {
           clearInterval(pollingIntervalRef.current);
           setStatus(jobData.status);
-          setOutput(jobData.output || 'No output generated.');
-          setIsLoading(false);
-        } else {
-          setStatus('Executing...');
+          setOutput(jobData.output || "");
+          setIsRunning(false);
+          setIsSubmitting(false);
+
+          if (type === "submit" && activeTab === "submissions") {
+            fetchHistory();
+          }
         }
       } catch (error) {
-        console.error(error);
         clearInterval(pollingIntervalRef.current);
-        setStatus('Polling Error');
-        setOutput('Lost connection to execution engine.');
-        setIsLoading(false);
+        setIsRunning(false);
+        setIsSubmitting(false);
       }
     }, 1500);
   };
 
-  const getStatusColor = () => {
-    if (status === 'AC') return 'text-green-400 bg-green-500/10 border-green-500/30';
-    if (['WA', 'TLE', 'RE', 'MLE', 'CE'].includes(status)) return 'text-red-400 bg-red-500/10 border-red-500/30';
-    if (status === 'Executing...' || status === 'Queued') return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
-    return 'text-gray-400 bg-[#1e1e1e] border-[#333]';
+  const handleRestoreCode = (submissionCode) => {
+    if (submissionCode) {
+      setCode(submissionCode);
+      setActiveTab("description");
+    }
   };
 
-  return (
-    <div className="h-screen w-screen bg-[#0a0a0a] p-4 md:p-6 flex flex-col gap-4 font-sans text-gray-200">
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#121212] border border-[#2a2a2a] p-4 rounded-xl shadow-sm">
-        <div className="mb-4 sm:mb-0">
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">CodeSpace</h1>
-          <p className="text-gray-500 text-sm mt-0.5 font-medium">Sum of Two Numbers</p>
-        </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className={`px-4 py-1.5 rounded-lg border text-sm font-bold tracking-wide shadow-sm flex-1 sm:flex-none text-center transition-colors duration-300 ${getStatusColor()}`}>
-            {status}
+  const getFullStatus = (statusCode) => {
+    const statusMap = {
+      AC: "Accepted",
+      WA: "Wrong Answer",
+      TLE: "Time Limit Exceeded",
+      RE: "Runtime Error",
+      CE: "Compilation Error",
+      MLE: "Memory Limit Exceeded",
+      IE: "Internal Error",
+      Idle: "Idle",
+      Queued: "Queued",
+      Executing: "Executing",
+      Pending: "Pending",
+      Error: "Error",
+    };
+    return statusMap[statusCode] || statusCode;
+  };
+
+  const renderConsoleContent = () => {
+    if (!output)
+      return (
+        <p className="text-sm font-mono text-zinc-500 italic mt-2">
+          Run code to see output...
+        </p>
+      );
+
+    let parsedResults = null;
+
+    if (Array.isArray(output)) {
+      parsedResults = output;
+    } else if (typeof output === "string" && output.trim().startsWith("[")) {
+      try {
+        parsedResults = JSON.parse(output);
+      } catch (e) {}
+    }
+
+    if (
+      parsedResults &&
+      Array.isArray(parsedResults) &&
+      parsedResults.length > 0
+    ) {
+      const activeRes = parsedResults[activeTestCase] || parsedResults[0] || {};
+      const overallStatus = parsedResults.every((r) => r?.status === "AC")
+        ? "AC"
+        : parsedResults.find((r) => r?.status !== "AC")?.status || "WA";
+
+      return (
+        <div className="flex flex-col animate-in fade-in duration-300">
+          {/* Header Status & Runtime */}
+          <div className="mb-6 flex items-baseline gap-4">
+            <h2 className={`text-2xl font-bold ${overallStatus === "AC" ? "text-green-500" : "text-red-500"}`}>
+              {getFullStatus(overallStatus)}
+            </h2>
+            {overallStatus === "AC" && activeRes?.time !== undefined && (
+              <span className="text-sm font-medium text-zinc-500">
+                Runtime: {Math.max(...parsedResults.map(r => r.time || 0))} ms
+              </span>
+            )}
           </div>
-          <button 
-            onClick={handleRunCode}
-            disabled={isLoading}
-            className="bg-blue-600 text-white hover:bg-blue-500 active:bg-blue-700 disabled:opacity-50 px-6 py-2 rounded-lg font-bold text-sm transition-all shadow-md shadow-blue-900/20"
+
+          {/* Test Case Pill Tabs */}
+          <div className="flex gap-2 mb-6 overflow-x-auto custom-scrollbar">
+            {parsedResults.map((res, i) => (
+              <button
+                key={i}
+                onClick={() => setActiveTestCase(i)}
+                className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap ${
+                  activeTestCase === i
+                    ? "bg-zinc-800 text-zinc-100"
+                    : "bg-transparent text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
+                }`}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full ${res?.status === "AC" ? "bg-green-500" : "bg-red-500"}`}></div>
+                Case {i + 1}
+              </button>
+            ))}
+          </div>
+
+          {/* I/O Fields */}
+          <div className="space-y-5">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-500">Input</span>
+              <div className="bg-zinc-900/80 rounded-lg px-4 py-3 font-mono text-sm text-zinc-300 whitespace-pre-wrap">
+                {activeRes?.input || "N/A"}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-500">Output</span>
+              <div className={`bg-zinc-900/80 rounded-lg px-4 py-3 font-mono text-sm whitespace-pre-wrap ${activeRes?.status === "AC" ? "text-zinc-300" : "text-red-400"}`}>
+                {activeRes?.actual || "N/A"}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-500">Expected</span>
+              <div className="bg-zinc-900/80 rounded-lg px-4 py-3 font-mono text-sm text-zinc-300 whitespace-pre-wrap">
+                {activeRes?.expected || "N/A"}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const isError = ["CE", "RE", "TLE", "WA"].includes(status);
+    let cleanedOutput = "Output formatting failed.";
+
+    if (typeof output === "string") {
+      cleanedOutput = output.replace(/[a-f0-9]{24}\.cpp/g, "solution.cpp");
+    } else if (typeof output === "object") {
+      cleanedOutput = JSON.stringify(output, null, 2);
+    }
+
+    return (
+      <div className={`p-6 rounded-xl border text-sm leading-relaxed font-mono whitespace-pre-wrap ${isError ? "bg-red-500/5 text-red-400 border-red-500/20 shadow-inner" : "text-zinc-300 border-zinc-800"}`}>
+        {status === "CE" && (
+          <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">
+            Compilation Error
+          </div>
+        )}
+        {status === "RE" && (
+          <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">
+            Runtime Error
+          </div>
+        )}
+        {cleanedOutput}
+      </div>
+    );
+  };
+
+  if (isFetchingProblem)
+    return (
+      <div className="h-screen w-screen bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 text-zinc-500 font-bold text-sm uppercase tracking-widest">
+        <div className="w-6 h-6 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin"></div>
+        Loading Workspace
+      </div>
+    );
+
+  return (
+    <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden">
+      <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
+        <div className="flex items-center gap-6">
+          <button
+            onClick={() => navigate("/")}
+            className="text-zinc-500 hover:text-white transition-colors text-[11px] font-bold uppercase tracking-widest"
           >
-            {isLoading ? 'Running...' : 'Run Code'}
+            ‹ Dashboard
           </button>
-          <button 
+          <div className="h-4 w-[1px] bg-zinc-800"></div>
+          <h1 className="text-sm font-bold text-zinc-100">
+            {problem?.title || "Problem"}
+          </h1>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-2 h-2 rounded-full ${status === "AC" ? "bg-green-500" : status === "Idle" ? "bg-zinc-600" : "bg-yellow-500 animate-pulse"}`}
+            ></div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+              {getFullStatus(status)}
+            </span>
+          </div>
+          <button
             onClick={handleLogout}
-            className="bg-[#1e1e1e] border border-[#333] text-gray-300 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 px-4 py-2 rounded-lg font-bold text-sm transition-all shadow-sm"
+            className="bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20 text-[10px] font-bold px-3 py-1.5 rounded transition-all uppercase tracking-widest"
           >
             Logout
           </button>
         </div>
       </header>
-      
-      <div className="flex-1 flex flex-col lg:flex-row gap-4 overflow-hidden">
-        <div className="w-full lg:w-1/3 bg-[#121212] border border-[#2a2a2a] rounded-xl p-6 overflow-y-auto custom-scrollbar shadow-sm">
-          <h2 className="text-lg font-bold text-white mb-3">Description</h2>
-          <p className="text-gray-400 text-sm mb-6 leading-relaxed">
-            Given two integers <code className="bg-[#1e1e1e] text-gray-200 px-1.5 py-0.5 rounded border border-[#333] font-mono text-xs">a</code> and <code className="bg-[#1e1e1e] text-gray-200 px-1.5 py-0.5 rounded border border-[#333] font-mono text-xs">b</code>, output their sum.
-          </p>
-          <div className="bg-[#0a0a0a] border border-[#2a2a2a] p-4 rounded-lg mb-4">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Input</h3>
-            <code className="text-sm text-gray-300 font-mono">10 20</code>
+
+      <div className="flex-1 flex gap-2 p-2 overflow-hidden">
+        {/* Left Panel */}
+        <div className="w-5/12 bg-[#0d0d0d] rounded-xl flex flex-col border border-zinc-800 shadow-xl overflow-hidden">
+          <div className="bg-[#141414] flex gap-1 shrink-0 border-b border-zinc-800/50 px-2">
+            <button
+              onClick={() => setActiveTab("description")}
+              className={`text-[10px] font-bold uppercase tracking-widest px-6 py-3 transition-all ${activeTab === "description" ? "text-white border-b-2 border-white" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              Problem
+            </button>
+            <button
+              onClick={() => setActiveTab("submissions")}
+              className={`text-[10px] font-bold uppercase tracking-widest px-6 py-3 transition-all ${activeTab === "submissions" ? "text-white border-b-2 border-white" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              Submissions
+            </button>
           </div>
-          <div className="bg-[#0a0a0a] border border-[#2a2a2a] p-4 rounded-lg">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Expected Output</h3>
-            <code className="text-sm text-gray-300 font-mono">30</code>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
+            {activeTab === "description" ? (
+              <div className="animate-in fade-in duration-300">
+                <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap mb-10">
+                  {problem?.description || "No description available."}
+                </p>
+                <div className="space-y-10">
+                  <section>
+                    <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-4">
+                      Constraints
+                    </h3>
+                    <div className="flex gap-4">
+                      <div className="bg-[#050505] px-4 py-2 rounded-lg border border-zinc-800 text-xs font-mono font-bold text-zinc-400">
+                        Time Limit: {problem?.timeLimit || "N/A"} ms
+                      </div>
+                      <div className="bg-[#050505] px-4 py-2 rounded-lg border border-zinc-800 text-xs font-mono font-bold text-zinc-400">
+                        Memory Limit: {problem?.memoryLimit || "N/A"} MB
+                      </div>
+                    </div>
+                  </section>
+                  <section>
+                    <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-4">
+                      Examples
+                    </h3>
+                    {(problem?.testCases || []).slice(0, 2).map((tc, index) => (
+                      <div key={index} className="mb-6 last:mb-0">
+                        <span className="text-[10px] font-bold text-zinc-600 uppercase block mb-3">
+                          Case {index + 1}
+                        </span>
+                        <div className="bg-[#050505] border border-zinc-800 rounded-xl p-5 font-mono text-sm text-zinc-300 leading-relaxed shadow-inner">
+                          <span className="text-zinc-600 font-bold mr-4 select-none">
+                            Input:
+                          </span>{" "}
+                          {tc?.input || ""} <br />
+                          <span className="text-zinc-600 font-bold mr-4 select-none">
+                            Output:
+                          </span>{" "}
+                          {tc?.output || ""}
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                {!Array.isArray(history) || history.length === 0 ? (
+                  <p className="text-center text-zinc-600 text-[10px] font-bold uppercase tracking-widest mt-10">
+                    No history
+                  </p>
+                ) : (
+                  history.map((sub, i) => (
+                    <div
+                      key={i}
+                      onClick={() => handleRestoreCode(sub.code)}
+                      className="bg-[#111] border border-zinc-800 p-4 rounded-xl flex justify-between items-center hover:border-zinc-500 transition-colors cursor-pointer group"
+                    >
+                      <div>
+                        <span
+                          className={`text-xs font-bold uppercase tracking-widest ${sub.status === "AC" ? "text-green-500" : "text-red-500"}`}
+                        >
+                          {getFullStatus(sub.status)}
+                        </span>
+                        <p className="text-[10px] text-zinc-500 font-mono mt-1 group-hover:text-zinc-300 transition-colors">
+                          {new Date(sub.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-xs font-mono text-zinc-400 bg-black px-3 py-1 rounded-lg border border-zinc-800">
+                          {sub.timeTaken}ms
+                        </span>
+                        <span className="text-[10px] text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity uppercase font-bold tracking-widest">
+                          Restore
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="w-full lg:w-2/3 flex flex-col gap-4 overflow-hidden">
-          <div className="flex-1 min-h-[300px] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-sm">
-            <CodeEditor code={code} setCode={setCode} />
-          </div>
-          
-          <div className="h-1/3 min-h-[200px] bg-[#121212] border border-[#2a2a2a] rounded-xl flex flex-col shadow-sm">
-            <div className="bg-[#1a1a1a] border-b border-[#2a2a2a] px-5 py-3 flex justify-between items-center rounded-t-xl">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-gray-600"></div>
-                Console Output
+        {/* Right Panel */}
+        <div className="w-7/12 flex flex-col gap-2 overflow-hidden">
+          <div className="flex-1 bg-[#0d0d0d] rounded-xl flex flex-col border border-zinc-800 shadow-xl overflow-hidden">
+            <div className="bg-[#141414] px-6 py-3 border-b border-zinc-800 flex justify-between items-center">
+              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest bg-blue-500/10 px-3 py-1 rounded-md border border-blue-500/20">
+                C++ 17
               </span>
             </div>
-            <pre className="flex-1 p-5 font-mono text-sm text-gray-300 overflow-auto whitespace-pre-wrap custom-scrollbar">
-              {output || "Run code to see output..."}
-            </pre>
+            <div className="flex-1 overflow-hidden">
+              <CodeEditor code={code} setCode={setCode} />
+            </div>
+          </div>
+
+          <div className="h-[40%] bg-[#0d0d0d] rounded-xl flex flex-col border border-zinc-800 shadow-xl overflow-hidden shrink-0">
+            <div className="bg-[#141414] px-6 py-3 border-b border-zinc-800">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                Console
+              </span>
+            </div>
+            <div className="flex-1 p-6 bg-[#050505] overflow-y-auto custom-scrollbar">
+              {renderConsoleContent()}
+            </div>
           </div>
         </div>
       </div>
+
+      <footer className="h-14 bg-[#0d0d0d] border-t border-zinc-800 px-6 flex justify-between items-center shrink-0 z-30">
+        <button className="text-[10px] font-bold text-zinc-600 hover:text-white uppercase tracking-widest transition-colors">
+          Output ▴
+        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => handleExecution("run")}
+            disabled={isRunning || isSubmitting}
+            className="bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-200 px-6 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all border border-zinc-700 disabled:opacity-50"
+          >
+            {isRunning ? "Running..." : "Run"}
+          </button>
+          <button
+            onClick={() => handleExecution("submit")}
+            disabled={isRunning || isSubmitting}
+            className="bg-[#2db55d] hover:bg-[#26a150] active:scale-95 text-white px-8 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 shadow-lg shadow-green-900/20"
+          >
+            {isSubmitting ? "Submitting..." : "Submit"}
+          </button>
+        </div>
+      </footer>
     </div>
   );
 }

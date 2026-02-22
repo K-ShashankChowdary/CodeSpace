@@ -1,35 +1,38 @@
 import mongoose, { Schema } from "mongoose";
 
 const submissionSchema = new Schema(
-  {
-    problemId: {
-      type: Schema.Types.ObjectId,
-      ref: "Problem", // References the Problem model
-      required: true,
+    {
+        problemId: {
+            type: Schema.Types.ObjectId,
+            ref: "Problem",
+            required: true
+        },
+        userId: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
+            required: true
+        },
+        code: {
+            type: String,
+            required: true
+        },
+        language: {
+            type: String,
+            required: true
+        },
+        status: {
+            type: String,
+            default: "Pending"
+        },
+        output: {
+            type: String
+        },
+        timeTaken: {
+            type: Number,
+            default: 0
+        }
     },
-    language: {
-      type: String,
-      required: true,
-      enum: ["cpp", "python", "java"], // Restrict to supported languages
-    },
-    code: {
-      type: String,
-      required: true,
-    },
-    status: {
-      type: String,
-      enum: ["Pending", "AC", "WA", "TLE", "MLE", "CE", "RE"],
-      default: "Pending",
-    },
-    output: {
-      type: String, // Stores execution output or error message
-    },
-    timeTaken: {
-      type: Number, // Store milliseconds
-      default: 0,
-    },
-  },
-  { timestamps: true },
+    { timestamps: true }
 );
 
 export const Submission = mongoose.model("Submission", submissionSchema);

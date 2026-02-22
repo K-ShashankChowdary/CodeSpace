@@ -1,38 +1,31 @@
+//import the dotenv config directly so it executes during the import phase, before anything else is evaluated
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import submissionRoutes from "./routes/submission.routes.js";
-import userRoutes from "./routes/user.routes.js";
 
 const app = express();
 
-//strictly define the frontend origin to bypass the browser's CORS block and allow credentials for cookies
-app.use(
-  cors({
-    origin: "http://localhost:5173",
+// configure CORS with the now-guaranteed environment variable
+app.use(cors({
+    origin: process.env.CORS_ORIGIN,
     credentials: true,
-  }),
-);
+}));
 
 // configure middlewares for parsing JSON and URL-encoded data
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
-
-// add the cookie parser middleware to extract JWTs from incoming request cookies securely
+app.use(express.static("public"));
 app.use(cookieParser());
 
-// mount the user authentication routes
-app.use("/api/v1/users", userRoutes);
+// import all my modular route files
+import userRouter from "./routes/user.routes.js";
+import submissionRouter from "./routes/submission.routes.js";
+import problemRouter from "./routes/problem.routes.js";
 
-// mount the code submission routes
-app.use("/api/v1/submissions", submissionRoutes);
-
-// use a global error handler to catch async errors cleanly and return a structured JSON response
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res
-    .status(500)
-    .json({ success: false, message: err.message || "Internal Server Error" });
-});
+// I mount the routers to their specific API version paths
+app.use("/api/v1/users", userRouter);
+app.use("/api/v1/submissions", submissionRouter);
+app.use("/api/v1/problems", problemRouter);
 
 export { app };
