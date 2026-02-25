@@ -1,11 +1,29 @@
 import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import CodeEditor from "../components/CodeEditor";
+import { io } from "socket.io-client";
+
+//Initialize socket globally outside the component
+const socket = io("http://localhost:5000", {
+  withCredentials: true,
+  autoConnect: false,
+  transports: ["websocket"]
+});
 
 function IDE() {
+  //IDE STATE------------------
   const { id } = useParams();
+  const [searchParams] = useSearchParams(); //Grab URL params
+  const roomCode = searchParams.get("room"); //Extract room code
   const navigate = useNavigate();
+  //--------------------------
+  //CLASSROOM STATE ---
+  const [room, setRoom] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isHost, setIsHost] = useState(false);
+  const [liveStatuses, setLiveStatuses] = useState({});
+  // ---------------------------
 
   const [problem, setProblem] = useState(null);
   const [isFetchingProblem, setIsFetchingProblem] = useState(true);
@@ -25,20 +43,69 @@ function IDE() {
   const pollingIntervalRef = useRef(null);
 
   useEffect(() => {
-    const fetchProblem = async () => {
+    const fetchWorkspaceData = async () => {
       try {
-        const response = await axios.get(
-          `http://localhost:5000/api/v1/problems/${id}`,
+        // 1. Fetch current user (needed for username in leaderboard)
+        const userRes = await axios.get(
+          "http://localhost:5000/api/v1/users/current-user",
+          { withCredentials: true },
         );
-        setProblem(response.data.data || null);
+        const user = userRes.data.data;
+        setCurrentUser(user);
+
+        // 2. Fetch the problem details
+        const probRes = await axios.get(
+          `http://localhost:5000/api/v1/problems/${id}`,
+          { withCredentials: true },
+        );
+        setProblem(probRes.data.data || null);
+
+        // 3. If in a room, fetch room details and connect socket
+        if (roomCode) {
+          const roomRes = await axios.get(
+            `http://localhost:5000/api/v1/rooms/details/${roomCode}`,
+            { withCredentials: true },
+          );
+          const roomData = roomRes.data.data;
+          setRoom(roomData);
+
+          // Check if current user is the host
+          if (roomData.host._id === user._id) {
+            setIsHost(true);
+          }
+
+          socket.connect();
+          socket.emit("join-room", roomCode);
+        }
       } catch (error) {
+        console.error("Workspace Load Error:", error);
         navigate("/");
       } finally {
         setIsFetchingProblem(false);
       }
     };
-    fetchProblem();
-  }, [id, navigate]);
+
+    fetchWorkspaceData();
+
+    return () => {
+      if (roomCode) socket.disconnect();
+    };
+  }, [id, roomCode, navigate]);
+
+  //SOCKET LISTENER FOR TEACHER ---
+  useEffect(() => {
+    if (!isHost || !roomCode) return;
+
+    socket.on("leaderboard-update", (data) => {
+      console.log("📥 TEACHER RECEIVED:", data);
+      setLiveStatuses((prev) => ({
+        ...prev,
+        [data.username]: data.status,
+      }));
+    });
+
+    return () => socket.off("leaderboard-update");
+  }, [isHost, roomCode]);
 
   useEffect(() => {
     if (activeTab === "submissions") {
@@ -50,6 +117,7 @@ function IDE() {
     try {
       const response = await axios.get(
         `http://localhost:5000/api/v1/submissions/history/${id}`,
+        { withCredentials: true },
       );
       setHistory(Array.isArray(response.data.data) ? response.data.data : []);
     } catch (error) {
@@ -59,7 +127,11 @@ function IDE() {
 
   const handleLogout = async () => {
     try {
-      await axios.post("http://localhost:5000/api/v1/users/logout");
+      await axios.post(
+        "http://localhost:5000/api/v1/users/logout",
+        {},
+        { withCredentials: true },
+      );
       window.location.href = "/auth";
     } catch (error) {}
   };
@@ -82,6 +154,7 @@ function IDE() {
           code: code,
           executionType: type,
         },
+        { withCredentials: true },
       );
       pollJobStatus(response.data.data.jobId, type);
     } catch (error) {
@@ -98,6 +171,7 @@ function IDE() {
       try {
         const response = await axios.get(
           `http://localhost:5000/api/v1/submissions/status/${jobId}`,
+          { withCredentials: true },
         );
         const jobData = response.data.data;
 
@@ -115,6 +189,22 @@ function IDE() {
           if (type === "submit" && activeTab === "submissions") {
             fetchHistory();
           }
+
+          // UPDATE REAL RESULTS TO SOCKET ---
+          if (roomCode && currentUser && type === "submit") {
+            console.log("STUDENT EMITTING:", {
+              roomCode,
+              username: currentUser.username,
+              status: jobData.status,
+            });
+
+            socket.emit("student-submission", {
+              roomCode,
+              username: currentUser.username,
+              status: jobData.status,
+            });
+          }
+          // ----------------------------------------
         }
       } catch (error) {
         clearInterval(pollingIntervalRef.current);
@@ -149,6 +239,7 @@ function IDE() {
     return statusMap[statusCode] || statusCode;
   };
 
+  // ... (Your exact renderConsoleContent function remains entirely unchanged here) ...
   const renderConsoleContent = () => {
     if (!output)
       return (
@@ -181,17 +272,18 @@ function IDE() {
         <div className="flex flex-col animate-in fade-in duration-300">
           {/* Header Status & Runtime */}
           <div className="mb-6 flex items-baseline gap-4">
-            <h2 className={`text-2xl font-bold ${overallStatus === "AC" ? "text-green-500" : "text-red-500"}`}>
+            <h2
+              className={`text-2xl font-bold ${overallStatus === "AC" ? "text-green-500" : "text-red-500"}`}
+            >
               {getFullStatus(overallStatus)}
             </h2>
             {overallStatus === "AC" && activeRes?.time !== undefined && (
               <span className="text-sm font-medium text-zinc-500">
-                Runtime: {Math.max(...parsedResults.map(r => r.time || 0))} ms
+                Runtime: {Math.max(...parsedResults.map((r) => r.time || 0))} ms
               </span>
             )}
           </div>
 
-          {/* Test Case Pill Tabs */}
           <div className="flex gap-2 mb-6 overflow-x-auto custom-scrollbar">
             {parsedResults.map((res, i) => (
               <button
@@ -203,13 +295,14 @@ function IDE() {
                     : "bg-transparent text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
                 }`}
               >
-                <div className={`w-1.5 h-1.5 rounded-full ${res?.status === "AC" ? "bg-green-500" : "bg-red-500"}`}></div>
+                <div
+                  className={`w-1.5 h-1.5 rounded-full ${res?.status === "AC" ? "bg-green-500" : "bg-red-500"}`}
+                ></div>
                 Case {i + 1}
               </button>
             ))}
           </div>
 
-          {/* I/O Fields */}
           <div className="space-y-5">
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-zinc-500">Input</span>
@@ -219,12 +312,16 @@ function IDE() {
             </div>
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-zinc-500">Output</span>
-              <div className={`bg-zinc-900/80 rounded-lg px-4 py-3 font-mono text-sm whitespace-pre-wrap ${activeRes?.status === "AC" ? "text-zinc-300" : "text-red-400"}`}>
+              <div
+                className={`bg-zinc-900/80 rounded-lg px-4 py-3 font-mono text-sm whitespace-pre-wrap ${activeRes?.status === "AC" ? "text-zinc-300" : "text-red-400"}`}
+              >
                 {activeRes?.actual || "N/A"}
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-zinc-500">Expected</span>
+              <span className="text-sm font-medium text-zinc-500">
+                Expected
+              </span>
               <div className="bg-zinc-900/80 rounded-lg px-4 py-3 font-mono text-sm text-zinc-300 whitespace-pre-wrap">
                 {activeRes?.expected || "N/A"}
               </div>
@@ -244,7 +341,9 @@ function IDE() {
     }
 
     return (
-      <div className={`p-6 rounded-xl border text-sm leading-relaxed font-mono whitespace-pre-wrap ${isError ? "bg-red-500/5 text-red-400 border-red-500/20 shadow-inner" : "text-zinc-300 border-zinc-800"}`}>
+      <div
+        className={`p-6 rounded-xl border text-sm leading-relaxed font-mono whitespace-pre-wrap ${isError ? "bg-red-500/5 text-red-400 border-red-500/20 shadow-inner" : "text-zinc-300 border-zinc-800"}`}
+      >
         {status === "CE" && (
           <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">
             Compilation Error
@@ -268,6 +367,88 @@ function IDE() {
       </div>
     );
 
+  //TEACHER VIEW
+  if (isHost) {
+    return (
+      <div className="min-h-screen bg-[#050505] text-white p-8 font-sans">
+        <header className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-blue-400">
+              Classroom: {problem?.title}
+            </h1>
+            <p className="text-zinc-500 font-mono mt-1 flex items-center gap-2">
+              Room Code:{" "}
+              <span className="text-white font-bold bg-zinc-800 px-3 py-1 rounded-md">
+                {roomCode}
+              </span>
+            </p>
+          </div>
+          <button
+            onClick={() => navigate("/")}
+            className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-white transition-colors bg-zinc-900 px-4 py-2 rounded-lg border border-zinc-800"
+          >
+            Exit Classroom
+          </button>
+        </header>
+
+        <div className="bg-[#0d0d0d] rounded-xl border border-zinc-800 overflow-hidden shadow-2xl">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-[#141414] border-b border-zinc-800 text-[10px] uppercase tracking-widest text-zinc-500">
+                <th className="p-4 font-bold">Student Name</th>
+                <th className="p-4 font-bold">Live Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {room?.participants
+                .filter((p) => p._id !== currentUser._id)
+                .map((student) => {
+                  const currentStatus =
+                    liveStatuses[student.username] || "In Progress";
+
+                  let badgeColor = "bg-zinc-800 text-zinc-400 border-zinc-700";
+                  if (currentStatus === "AC")
+                    badgeColor =
+                      "bg-green-500/10 text-green-500 border-green-500/20";
+                  else if (currentStatus !== "In Progress")
+                    badgeColor = "bg-red-500/10 text-red-500 border-red-500/20";
+
+                  return (
+                    <tr
+                      key={student._id}
+                      className="border-b border-zinc-800/50 hover:bg-zinc-900/30 transition-colors"
+                    >
+                      <td className="p-4 text-sm font-medium">
+                        {student.username}
+                      </td>
+                      <td className="p-4">
+                        <span
+                          className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${badgeColor}`}
+                        >
+                          {getFullStatus(currentStatus)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              {room?.participants.length <= 1 && (
+                <tr>
+                  <td colSpan="2" className="p-12 text-center">
+                    <div className="w-6 h-6 border-2 border-zinc-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <span className="text-zinc-500 text-[10px] uppercase tracking-widest font-bold">
+                      Waiting for students to join
+                    </span>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // STUDENT VIEW
   return (
     <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden">
       <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
@@ -279,8 +460,14 @@ function IDE() {
             ‹ Dashboard
           </button>
           <div className="h-4 w-[1px] bg-zinc-800"></div>
-          <h1 className="text-sm font-bold text-zinc-100">
+          <h1 className="text-sm font-bold text-zinc-100 flex items-center gap-4">
             {problem?.title || "Problem"}
+            {/* NEW: Room Badge for Students */}
+            {roomCode && (
+              <span className="bg-blue-500/10 text-blue-400 text-[9px] px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-widest">
+                Classroom: {roomCode}
+              </span>
+            )}
           </h1>
         </div>
         <div className="flex items-center gap-6">
@@ -300,7 +487,6 @@ function IDE() {
           </button>
         </div>
       </header>
-
       <div className="flex-1 flex gap-2 p-2 overflow-hidden">
         {/* Left Panel */}
         <div className="w-5/12 bg-[#0d0d0d] rounded-xl flex flex-col border border-zinc-800 shadow-xl overflow-hidden">

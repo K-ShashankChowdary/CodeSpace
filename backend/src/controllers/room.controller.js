@@ -4,21 +4,24 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { Room } from "../models/room.model.js";
 import crypto from "crypto";
 
+// Handle the creation of a new classroom/room
 const createRoom = asyncHandler(async (req, res) => {
     const { problemId } = req.body;
 
+    // Ensure a problem is selected before creating a room
     if (!problemId) {
         throw new ApiError(400, "Problem selection is mandatory to start a room");
     }
 
-    // Generating a unique 6-character hex code for students to join
+    // Generate a unique 6-character hex code for students to join
     const roomCode = crypto.randomBytes(3).toString("hex").toUpperCase();
 
+    // Create the room document in the database
     const room = await Room.create({
         roomCode,
-        host: req.user._id,
+        host: req.user._id, // The user creating the room is assigned as the host
         problemId,
-        participants: [req.user._id] // Host is added as the first participant by default
+        participants: [req.user._id] // Automatically add the host as the first participant
     });
 
     return res.status(201).json(
@@ -26,6 +29,7 @@ const createRoom = asyncHandler(async (req, res) => {
     );
 });
 
+// Handle the logic for a student joining an existing room
 const joinRoom = asyncHandler(async (req, res) => {
     const { roomCode } = req.body;
 
@@ -33,17 +37,18 @@ const joinRoom = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Please provide a valid room code");
     }
 
-    // Looking for an active session matching the code
+    // Look for an active session matching the provided room code
     const room = await Room.findOne({ 
         roomCode: roomCode.trim().toUpperCase(), 
         isActive: true 
     });
 
+    // If no room is found or it has been closed, throw a 404 error
     if (!room) {
         throw new ApiError(404, "This room does not exist or has been closed");
     }
 
-    // Checking if user is already in the list to avoid duplicates
+    // Check if the user is already in the participants list to avoid duplicates
     const isAlreadyParticipant = room.participants.includes(req.user._id);
 
     if (!isAlreadyParticipant) {
@@ -56,4 +61,24 @@ const joinRoom = asyncHandler(async (req, res) => {
     );
 });
 
-export { createRoom, joinRoom };
+// Fetch specific room details so the IDE can identify the host and students
+const getRoomDetails = asyncHandler(async (req, res) => {
+    const { roomCode } = req.params;
+
+    // Find the room and populate the username and email for the host and participants
+    const room = await Room.findOne({ roomCode: roomCode.toUpperCase(), isActive: true })
+        .populate("host", "username email")
+        .populate("participants", "username email");
+
+    if (!room) {
+        throw new ApiError(404, "Room not found or inactive");
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, room, "Room details fetched")
+    );
+});
+
+
+// Export all room controller functions
+export { createRoom, joinRoom, getRoomDetails };
