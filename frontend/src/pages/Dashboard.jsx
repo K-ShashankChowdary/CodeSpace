@@ -13,7 +13,6 @@ function Dashboard() {
   useEffect(() => {
     const fetchProblems = async () => {
       try {
-        // Ensure you send credentials if your problems route requires authentication
         const res = await axios.get("http://localhost:5000/api/v1/problems", {
           withCredentials: true,
         });
@@ -30,7 +29,7 @@ function Dashboard() {
 
   const handleCreateRoom = async (problemId) => {
     try {
-      console.log("Attempting to create room for problem:", problemId); // <-- Check if this prints
+      console.log("Attempting to create room for problem:", problemId);
 
       const res = await axios.post(
         "http://localhost:5000/api/v1/rooms/create",
@@ -69,6 +68,24 @@ function Dashboard() {
     }
   };
 
+  // --- NEW LOGOUT FUNCTION ---
+  const handleLogout = async () => {
+    try {
+      // Calls the backend to clear the httpOnly cookie
+      await axios.post(
+        "http://localhost:5000/api/v1/auth/logout", // <-- Update this if your route is different
+        {}, 
+        { withCredentials: true }
+      );
+      
+      // Redirect user back to the login page
+      navigate("/login"); 
+    } catch (error) {
+      console.error("Logout failed:", error);
+      alert("Failed to logout. Please try again.");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
@@ -90,23 +107,33 @@ function Dashboard() {
             </p>
           </div>
 
-          {/* Join Room Form */}
-          <form onSubmit={handleJoinRoom} className="flex gap-3">
-            <input
-              className="bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-lg text-sm font-mono focus:border-blue-500 outline-none uppercase placeholder:normal-case transition-colors w-48"
-              placeholder="Enter Room Code"
-              value={roomCodeInput}
-              onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
-              maxLength={6}
-            />
+          {/* Right Side Controls: Join Form + Logout Button */}
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <form onSubmit={handleJoinRoom} className="flex gap-3">
+              <input
+                className="bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-lg text-sm font-mono focus:border-blue-500 outline-none uppercase placeholder:normal-case transition-colors w-48"
+                placeholder="Enter Room Code"
+                value={roomCodeInput}
+                onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
+                maxLength={6}
+              />
+              <button
+                type="submit"
+                disabled={!roomCodeInput.trim()}
+                className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
+              >
+                Join
+              </button>
+            </form>
+
+            {/* NEW LOGOUT BUTTON */}
             <button
-              type="submit"
-              disabled={!roomCodeInput.trim()}
-              className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
+              onClick={handleLogout}
+              className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-red-400 border border-transparent hover:border-red-500/30 hover:bg-red-500/10 rounded-lg transition-all"
             >
-              Join
+              Logout
             </button>
-          </form>
+          </div>
         </header>
 
         {error && (

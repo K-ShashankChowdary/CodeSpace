@@ -459,7 +459,7 @@ function IDE() {
           >
             ‹ Dashboard
           </button>
-          <div className="h-4 w-[1px] bg-zinc-800"></div>
+          <div className="h-4 w-px bg-zinc-800"></div>
           <h1 className="text-sm font-bold text-zinc-100 flex items-center gap-4">
             {problem?.title || "Problem"}
             {/* NEW: Room Badge for Students */}
