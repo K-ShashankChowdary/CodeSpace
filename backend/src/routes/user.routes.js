@@ -4,6 +4,7 @@ import {
   loginUser,
   logoutUser,
   getCurrentUser,
+  refreshAccessToken,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -17,6 +18,9 @@ router.route("/login").post(loginUser);
 
 // apply the verifyJWT middleware to ensure only authenticated users can access the logout route
 router.route("/logout").post(verifyJWT, logoutUser);
+
+// route to refresh the access token silently
+router.route("/refresh-token").post(refreshAccessToken);
 
 //create a strictly protected route for the frontend to verify active sessions on initial page load
 router.route("/me").get(verifyJWT, getCurrentUser);

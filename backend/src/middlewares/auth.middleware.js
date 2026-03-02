@@ -1,5 +1,6 @@
 import { User } from "../models/user.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
 
 export const verifyJWT = asyncHandler(async (req, _, next) => {
@@ -9,7 +10,7 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
     req.header("Authorization")?.replace("Bearer ", "");
 
   if (!token) {
-    throw new Error("Unauthorized request");
+    throw new ApiError(401, "Unauthorized request");
   }
 
   // decode the token using the secret key
@@ -21,7 +22,7 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
   );
 
   if (!user) {
-    throw new Error("Invalid Access Token");
+    throw new ApiError(401, "Invalid Access Token");
   }
 
   req.user = user;

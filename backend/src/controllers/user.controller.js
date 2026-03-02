@@ -1,5 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
+import { ApiError } from "../utils/ApiError.js";
+import jwt from "jsonwebtoken";
 
 // create a utility function to handle generating both tokens simultaneously
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -14,7 +16,8 @@ const generateAccessAndRefreshTokens = async (userId) => {
 
     return { accessToken, refreshToken };
   } catch (error) {
-    throw new Error(
+    throw new ApiError(
+      500,
       "Something went wrong while generating refresh and access tokens",
     );
   }
@@ -26,13 +29,13 @@ const registerUser = asyncHandler(async (req, res) => {
 
   // check if any field is empty and throw an error to prevent invalid database entries
   if ([username, email, password].some((field) => field?.trim() === "")) {
-    throw new Error("All fields are required");
+    throw new ApiError(400, "All fields are required");
   }
 
   // query the database to ensure no existing user has the same email or username
   const existedUser = await User.findOne({ $or: [{ username }, { email }] });
   if (existedUser) {
-    throw new Error("User with email or username already exists");
+    throw new ApiError(409, "User with email or username already exists");
   }
 
   // create the user, triggering the pre-save hook to hash the password
@@ -43,7 +46,7 @@ const registerUser = asyncHandler(async (req, res) => {
     "-password -refreshToken",
   );
   if (!createdUser) {
-    throw new Error("Something went wrong while registering the user");
+    throw new ApiError(500, "Something went wrong while registering the user");
   }
 
   // return a 201 Created status alongside the sanitized user data
@@ -60,19 +63,19 @@ const loginUser = asyncHandler(async (req, res) => {
 
   // verify that at least one identifier is provided
   if (!username && !email) {
-    throw new Error("Username or email is required");
+    throw new ApiError(400, "Username or email is required");
   }
 
   // locate the user in the database based on the provided identifier
   const user = await User.findOne({ $or: [{ username }, { email }] });
   if (!user) {
-    throw new Error("User does not exist");
+    throw new ApiError(404, "User does not exist");
   }
 
   // validate the provided password against the hashed password stored in the database
   const isPasswordValid = await user.isPasswordCorrect(password);
   if (!isPasswordValid) {
-    throw new Error("Invalid user credentials");
+    throw new ApiError(401, "Invalid user credentials");
   }
 
   // generate the JWTs for session management
@@ -139,4 +142,51 @@ const getCurrentUser = asyncHandler(async (req, res) => {
   });
 });
 
-export { registerUser, loginUser, logoutUser, getCurrentUser };
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  const incomingRefreshToken =
+    req.cookies.refreshToken || req.body.refreshToken;
+
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "unauthorized request");
+  }
+
+  try {
+    const decodedToken = jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET,
+    );
+
+    const user = await User.findById(decodedToken?._id);
+
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token");
+    }
+
+    if (incomingRefreshToken !== user?.refreshToken) {
+      throw new ApiError(401, "Refresh token is expired or used");
+    }
+
+    const { accessToken, refreshToken: newRefreshToken } =
+      await generateAccessAndRefreshTokens(user._id);
+
+    const options = {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+    };
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", newRefreshToken, options)
+      .json({
+        success: true,
+        data: { accessToken, refreshToken: newRefreshToken },
+        message: "Access token refreshed",
+      });
+  } catch (error) {
+    throw new ApiError(401, error?.message || "Invalid refresh token");
+  }
+});
+
+export { registerUser, loginUser, logoutUser, getCurrentUser, refreshAccessToken };
