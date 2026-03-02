@@ -68,18 +68,16 @@ function Dashboard() {
     }
   };
 
-  // --- NEW LOGOUT FUNCTION ---
   const handleLogout = async () => {
     try {
       // Calls the backend to clear the httpOnly cookie
       await axios.post(
-        "http://localhost:5000/api/v1/auth/logout", // <-- Update this if your route is different
+        "http://localhost:5000/api/v1/users/logout", // Changed from auth/logout
         {}, 
         { withCredentials: true }
       );
-      
       // Redirect user back to the login page
-      navigate("/login"); 
+      window.location.href = "/auth";
     } catch (error) {
       console.error("Logout failed:", error);
       alert("Failed to logout. Please try again.");
