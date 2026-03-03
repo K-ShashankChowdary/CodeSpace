@@ -8,27 +8,27 @@ const roomSchema = new Schema(
             unique: true,
             uppercase: true,
             trim: true,
-            index: true // Optimized for fast lookups during join
+            index: true         // indexed for fast lookups when students join
         },
         host: {
             type: Schema.Types.ObjectId,
-            ref: "User",
+            ref: "User",        // the teacher who created this room
             required: true
         },
         problemId: {
             type: Schema.Types.ObjectId,
-            ref: "Problem",
+            ref: "Problem",     // the problem assigned to this classroom session
             required: true
         },
         participants: [
             {
                 type: Schema.Types.ObjectId,
-                ref: "User"
+                ref: "User"     // all users in the room (host + students)
             }
         ],
         isActive: {
             type: Boolean,
-            default: true
+            default: true       // set to false when the teacher closes the room
         }
     },
     { timestamps: true }

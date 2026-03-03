@@ -1,24 +1,32 @@
+// ============================================================================
+// CodeEditor.jsx - Monaco Code Editor Component
+// ============================================================================
+// Wraps Monaco Editor (the engine behind VS Code) to provide a full-featured
+// code editing experience with syntax highlighting, bracket matching, and
+// smooth animations. Code state is managed by the parent (IDE.jsx).
+// ============================================================================
+
 import React from "react";
 import Editor from "@monaco-editor/react";
 
 const CodeEditor = ({ code, setCode, language = "cpp" }) => {
-  // I am setting up the editor options to make it look clean and behave like VS Code
+  // Editor settings configured to feel premium and VS Code-like
   const editorOptions = {
     fontSize: 16,
     fontFamily: "'Fira Code', 'JetBrains Mono', monospace",
-    minimap: { enabled: false },
-    scrollBeyondLastLine: false,
-    automaticLayout: true,
+    minimap: { enabled: false },           // hide minimap for a cleaner look
+    scrollBeyondLastLine: false,           // prevent scrolling past the last line
+    automaticLayout: true,                 // auto-resize when container changes
     padding: { top: 16, bottom: 16 },
     cursorSmoothCaretAnimation: "on",
     cursorBlinking: "expand",
-    formatOnPaste: true,
+    formatOnPaste: true,                   // auto-format pasted code
     lineHeight: 24,
-    bracketPairColorization: { enabled: true },
+    bracketPairColorization: { enabled: true }, // colorize matching brackets
   };
 
+  // Updates parent's code state on every keystroke
   const handleEditorChange = (value) => {
-    // I update the parent component's state whenever the user types
     setCode(value);
   };
 

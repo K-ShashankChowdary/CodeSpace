@@ -1,25 +1,20 @@
 import dotenv from "dotenv";
-import { createServer } from "http"; // <-- 1. Import native HTTP module
-import { Server } from "socket.io";  // <-- 2. Import Socket.io
+import { createServer } from "http";
+import { Server } from "socket.io";
 import connectDB from "./db/index.js";
 import { connectRedis } from "./redis/client.js";
 import { app } from "./app.js";
 
-// Load environment variables immediately
 dotenv.config({ path: "./.env" });
 
 const startServer = async () => {
     try {
-        // 1. Connect to Database
         await connectDB();
-        
-        // 2. Connect to Redis Queue
         await connectRedis();
         
-        // 3. Create a native HTTP server wrapping the Express app
+        // wrap Express in a native HTTP server so both REST and WebSockets share the same port
         const httpServer = createServer(app);
 
-        // 4. Initialize Socket.io on that HTTP server
         const io = new Server(httpServer, {
             cors: {
                 origin: process.env.CORS_ORIGIN,
@@ -27,20 +22,19 @@ const startServer = async () => {
             }
         });
 
-        // 5. Setup the WebSocket event listeners for the Classroom
+        // WebSocket events for the classroom feature
         io.on("connection", (socket) => {
             console.log(`🟢 Socket connected: ${socket.id}`);
 
-            // When a user opens the IDE with ?room=CODE
+            // student joins a classroom room by code
             socket.on("join-room", (roomCode) => {
                 socket.join(roomCode);
                 console.log(`👤 User joined room: ${roomCode}`);
             });
 
-            // When a student gets a result from the C++ worker
+            // student finished executing code, broadcast result to the teacher
             socket.on("student-submission", (data) => {
                 const { roomCode, username, status } = data;
-                // Broadcast this update to the teacher in that specific room
                 socket.to(roomCode).emit("leaderboard-update", { username, status });
             });
 
@@ -49,7 +43,6 @@ const startServer = async () => {
             });
         });
 
-        // 6. Start the httpServer (NOT app.listen)
         const port = process.env.PORT || 8000;
         httpServer.listen(port, () => {
             console.log(`\n⚙️ Server & WebSockets running at port: ${port}`);

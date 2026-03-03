@@ -22,14 +22,14 @@ const submissionSchema = new Schema(
         },
         status: {
             type: String,
-            default: "Pending"
+            default: "Pending"  // updated to AC/WA/TLE/MLE/CE/RE by the C++ worker
         },
         output: {
-            type: String
+            type: String        // raw stdout/stderr or JSON array of test case results
         },
         timeTaken: {
             type: Number,
-            default: 0
+            default: 0          // execution time in milliseconds
         }
     },
     { timestamps: true }

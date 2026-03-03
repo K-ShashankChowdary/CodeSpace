@@ -18,10 +18,12 @@ const submitCode = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Problem not found");
     }
 
+    // "run" only tests visible cases, "submit" tests all including hidden ones
     const testCasesToRun = executionType === "run" 
         ? problem.testCases.filter(tc => !tc.isHidden)
         : problem.testCases;
 
+    // create a pending submission record, the C++ worker updates it once done
     const submission = await Submission.create({
         problemId,
         userId: req.user._id,
@@ -30,6 +32,7 @@ const submitCode = asyncHandler(async (req, res) => {
         status: "Pending"
     });
 
+    // push the job onto the Redis queue for the C++ worker to pick up
     const payload = JSON.stringify({
         jobId: submission._id.toString(),
         code,
@@ -41,6 +44,7 @@ const submitCode = asyncHandler(async (req, res) => {
 
     await redisClient.lPush("submissions", payload);
 
+    // 202 = accepted but not yet processed, frontend polls for the result
     return res.status(202).json(
         new ApiResponse(202, { jobId: submission._id }, "Submission queued")
     );
@@ -48,6 +52,8 @@ const submitCode = asyncHandler(async (req, res) => {
 
 const getSubmissionStatus = asyncHandler(async (req, res) => {
     const { id } = req.params;
+
+    // frontend polls this every 1.5s until status changes from "Pending"
     const submission = await Submission.findById(id);
 
     if (!submission) {
@@ -66,7 +72,7 @@ const getUserSubmissions = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid problem ID format");
     }
 
-    // Force strict ObjectId matching for both fields
+    // explicit ObjectId casting to prevent string-vs-ObjectId mismatches
     const submissions = await Submission.find({
         problemId: new mongoose.Types.ObjectId(problemId),
         userId: new mongoose.Types.ObjectId(req.user._id)

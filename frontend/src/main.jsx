@@ -1,3 +1,4 @@
+// React app entry point - mounts the App component with routing support
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';

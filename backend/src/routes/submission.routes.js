@@ -8,11 +8,11 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-// Applying JWT verification to all routes here
+// all submission routes require authentication
 router.use(verifyJWT);
 
-router.route("/submit").post(submitCode);
-router.route("/status/:id").get(getSubmissionStatus);
-router.route("/history/:problemId").get(getUserSubmissions); 
+router.route("/submit").post(submitCode);                  // queues code for execution
+router.route("/status/:id").get(getSubmissionStatus);      // frontend polls this until result is ready
+router.route("/history/:problemId").get(getUserSubmissions); // past submissions for a specific problem
 
 export default router;

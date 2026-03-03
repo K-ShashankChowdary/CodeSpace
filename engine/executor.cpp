@@ -8,36 +8,30 @@
 #include <csignal>
 #include <vector>
 
+// Reference: https://medium.com/@blogs4devs/implementing-a-remote-code-execution-engine-from-scratch-4a765a3c7303
 namespace fs = std::filesystem;
 using namespace std;
 using namespace std::chrono;
 
-/**
- * My Container Configuration
- * I defined these constants to strictly limit what the user code can do.
- * MEM_LIMIT: I set this to 256MB.
- * THRESHOLD_MS: I use 3500ms. If a process is killed (137) before this, it's MLE. After, it's TLE.
- */
-const string IMAGE = "cpp-runner";
-const int MAX_OUTPUT_SIZE = 10000;   
-const string MEM_LIMIT = "256m";     
-const string CPU_LIMIT = "0.5";      
-const string PID_LIMIT = "64";       
-const string TIME_LIMIT = "4s";      
-const int THRESHOLD_MS = 3500;       
+// Docker container resource limits
+const string IMAGE = "cpp-runner";       // pre-built Docker image with g++
+const int MAX_OUTPUT_SIZE = 10000;       // caps stdout buffer to 10KB to prevent memory bombs
+const string MEM_LIMIT = "256m";         // limits container memory to 256MB, triggers OOM kill on overflow
+const string CPU_LIMIT = "0.5";          // limits container to half a CPU core
+const string PID_LIMIT = "64";           // blocks fork bombs by capping process count
+const string TIME_LIMIT = "4s";          // max wall-clock time before gtimeout kills the process
+const int THRESHOLD_MS = 3500;           // if killed before 3.5s = MLE, after = TLE
 
+// stored globally so signal handler can close it
 FILE* current_pipe = nullptr;
 
-/**
- * Signal Handler
- * I need to ensure the pipe to the shell is closed if the executor itself is interrupted.
- */
+// cleans up the pipe if executor gets interrupted (Ctrl+C or SIGTERM)
 void cleanup(int signum) {
     if (current_pipe) pclose(current_pipe);
     exit(signum);
 }
 
-// I use this to make sure stdout from the container doesn't break my JSON response
+// escapes special chars so raw output can be safely embedded in JSON
 string json_escape(const string &input) {
     string output = "";
     for (char c : input) {
@@ -50,43 +44,41 @@ string json_escape(const string &input) {
     return output;
 }
 
+// Node.js worker spawns this with: ./executor <jobId> <tempDirPath>
 int main(int argc, char *argv[]) {
     signal(SIGINT, cleanup);
     signal(SIGTERM, cleanup);
 
-    // I now expect TWO arguments: Job ID and the Absolute Path to the temp directory
     if (argc < 3) {
         cout << "{\"status\":\"IE\",\"output\":\"INTERNAL: Missing Job ID or Temp Path\"}" << endl;
         return 1;
     }
 
     try {
-        string jobId = argv[1];
-        string pathArg = argv[2]; 
+        string jobId = argv[1];       // MongoDB submission _id
+        string pathArg = argv[2];     // absolute path to temp dir with .cpp and .txt files
         
-        // I use the path provided by Node.js to avoid "No such file" errors
         fs::path tempDir(pathArg); 
         fs::path codePath = tempDir / (jobId + ".cpp");
         fs::path inputPath = tempDir / (jobId + ".txt");
         
-        // I use gtimeout for Mac compatibility; I'll swap to 'timeout' on Linux later
+        // macOS uses gtimeout (brew install coreutils), Linux uses timeout
         #ifdef __APPLE__
             string timeoutCmd = "gtimeout"; 
         #else
             string timeoutCmd = "timeout";
         #endif
         
-        // I check if the input file exists on the host before telling Docker to use it
+        // if input file exists, pipe it as stdin to the compiled binary
         string dockerRunCmd = "./r";
         if (fs::exists(inputPath)) {
             dockerRunCmd += " < " + jobId + ".txt";
         }
 
-        /**
-         * My Execution Command Construction:
-         * I mount the host temp directory to /app and run the compiler + binary in one go.
-         * I redirect 2>&1 so I can catch compilation errors and runtime crashes in the same buffer.
-         */
+        // build the docker run command with all security flags:
+        // --rm (auto-cleanup), --network none (no internet), --memory (RAM cap),
+        // --memory-swap (disable swap), --pids-limit (fork bomb protection),
+        // 2>&1 (capture both stdout and stderr)
         string cmd = timeoutCmd + " -k 1s " + TIME_LIMIT + " docker run --rm --init " +
                      "--cpus=\"" + CPU_LIMIT + "\" " +
                      "--stop-timeout 1 " +
@@ -101,6 +93,7 @@ int main(int argc, char *argv[]) {
         
         if (!current_pipe) throw runtime_error("Pipe failed");
 
+        // read container output, capped at MAX_OUTPUT_SIZE
         string raw_out;
         array<char, 128> buf;
         while (fgets(buf.data(), buf.size(), current_pipe)) {
@@ -108,24 +101,23 @@ int main(int argc, char *argv[]) {
         }
 
         int pclose_status = pclose(current_pipe);
-        current_pipe = nullptr; 
+        current_pipe = nullptr;
         
         int exit_code = WEXITSTATUS(pclose_status);
         auto end = high_resolution_clock::now();
         long duration = duration_cast<milliseconds>(end - start).count();
 
-        // --- Verdict Determination Logic ---
+        // determine verdict from exit code and timing
         string status = "AC";
         
-        // 124: gtimeout killed it.
-        // 137: Docker/Kernel killed it (SIGKILL).
         if (exit_code == 124) {
-            status = "TLE";
+            status = "TLE";  // gtimeout killed it
         } else if (exit_code == 137) {
-            // If it died instantly (< 3.5s), it's OOM (MLE). Otherwise, it's a timeout.
+            // SIGKILL: if it died fast (<3.5s) = OOM killed (MLE), otherwise TLE
             if (duration < THRESHOLD_MS) status = "MLE";
             else status = "TLE";
         } else if (exit_code != 0) {
+            // check if g++ error messages present to distinguish CE from RE
             if (raw_out.find("error:") != string::npos || raw_out.find("fatal error:") != string::npos) {
                 status = "CE";
             } else {
@@ -133,7 +125,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // Final output for my Node.js worker
+        // JSON output consumed by the Node.js worker
         cout << "{"
              << "\"status\":\"" << status << "\","
              << "\"time_ms\":" << duration << ","

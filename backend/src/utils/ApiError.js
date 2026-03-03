@@ -1,7 +1,4 @@
-/**
- * Custom API Error Class
- * Extends the native Error class to include HTTP status codes and structured error arrays.
- */
+// custom error class with HTTP status codes for consistent API error responses
 class ApiError extends Error {
     constructor(
         statusCode,
@@ -11,12 +8,11 @@ class ApiError extends Error {
     ) {
         super(message);
         this.statusCode = statusCode;
-        this.data = null; // Standardizes response structure
+        this.data = null;
         this.message = message;
-        this.success = false; // Flag for frontend logic
+        this.success = false;
         this.errors = errors;
 
-        // Capture stack trace for debugging in development
         if (stack) {
             this.stack = stack;
         } else {

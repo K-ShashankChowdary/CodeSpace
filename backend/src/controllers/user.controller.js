@@ -3,53 +3,45 @@ import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
 
-// create a utility function to handle generating both tokens simultaneously
+// generates both tokens, saves refresh token to DB for later validation
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
 
-    // attach the refresh token to the user document and save it, bypassing validation checks
+    // save refresh token to DB, skip password validation since we're only updating the token
     user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
 
     return { accessToken, refreshToken };
   } catch (error) {
-    throw new ApiError(
-      500,
-      "Something went wrong while generating refresh and access tokens",
-    );
+    throw new ApiError(500, "Something went wrong while generating refresh and access tokens");
   }
 };
 
 const registerUser = asyncHandler(async (req, res) => {
-  // extract registration details from the incoming request body
   const { username, email, password } = req.body;
 
-  // check if any field is empty and throw an error to prevent invalid database entries
   if ([username, email, password].some((field) => field?.trim() === "")) {
     throw new ApiError(400, "All fields are required");
   }
 
-  // query the database to ensure no existing user has the same email or username
+  // check for duplicate email or username
   const existedUser = await User.findOne({ $or: [{ username }, { email }] });
   if (existedUser) {
     throw new ApiError(409, "User with email or username already exists");
   }
 
-  // create the user, triggering the pre-save hook to hash the password
+  // pre-save hook in user.model.js auto-hashes the password
   const user = await User.create({ username, email, password });
 
-  // fetch the newly created user without exposing the password or refresh token
-  const createdUser = await User.findById(user._id).select(
-    "-password -refreshToken",
-  );
+  // re-fetch without sensitive fields
+  const createdUser = await User.findById(user._id).select("-password -refreshToken");
   if (!createdUser) {
     throw new ApiError(500, "Something went wrong while registering the user");
   }
 
-  // return a 201 Created status alongside the sanitized user data
   return res.status(201).json({
     success: true,
     data: createdUser,
@@ -58,44 +50,33 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 const loginUser = asyncHandler(async (req, res) => {
-  // extract the login credentials from the request body
   const { email, username, password } = req.body;
 
-  // verify that at least one identifier is provided
   if (!username && !email) {
     throw new ApiError(400, "Username or email is required");
   }
 
-  // locate the user in the database based on the provided identifier
   const user = await User.findOne({ $or: [{ username }, { email }] });
   if (!user) {
     throw new ApiError(404, "User does not exist");
   }
 
-  // validate the provided password against the hashed password stored in the database
   const isPasswordValid = await user.isPasswordCorrect(password);
   if (!isPasswordValid) {
     throw new ApiError(401, "Invalid user credentials");
   }
 
-  // generate the JWTs for session management
-  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
-    user._id,
-  );
+  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
 
-  // retrieve the user data again, excluding sensitive fields, to send back to the client
-  const loggedInUser = await User.findById(user._id).select(
-    "-password -refreshToken",
-  );
+  const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
-  // explicitly configure cookies for local development to prevent the browser from dropping them
+  // httpOnly prevents JS access (XSS protection), secure=false for local dev
   const options = {
     httpOnly: true,
     secure: false,
     sameSite: "lax",
   };
 
-  // attach the tokens to the cookies and send the success response
   return res
     .status(200)
     .cookie("accessToken", accessToken, options)
@@ -108,21 +89,20 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-  // find the user by the ID attached to the request by the auth middleware and unset their refresh token
+  // remove refresh token from DB so it can't be reused
   await User.findByIdAndUpdate(
     req.user._id,
     { $unset: { refreshToken: 1 } },
     { new: true },
   );
 
-  // reuse the exact permissive cookie options to successfully overwrite and delete the existing cookies
+  // must match login cookie options exactly or browser won't clear them
   const options = {
     httpOnly: true,
     secure: false,
     sameSite: "lax",
   };
 
-  // clear the cookies from the client's browser to terminate the session
   return res
     .status(200)
     .clearCookie("accessToken", options)
@@ -134,7 +114,7 @@ const logoutUser = asyncHandler(async (req, res) => {
 });
 
 const getCurrentUser = asyncHandler(async (req, res) => {
-  // return the user data that was already validated and attached by the verifyJWT middleware
+  // req.user is already set by verifyJWT middleware
   return res.status(200).json({
     success: true,
     data: req.user,
@@ -143,29 +123,26 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  const incomingRefreshToken =
-    req.cookies.refreshToken || req.body.refreshToken;
+  const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
 
   if (!incomingRefreshToken) {
     throw new ApiError(401, "unauthorized request");
   }
 
   try {
-    const decodedToken = jwt.verify(
-      incomingRefreshToken,
-      process.env.REFRESH_TOKEN_SECRET,
-    );
-
+    const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET);
     const user = await User.findById(decodedToken?._id);
 
     if (!user) {
       throw new ApiError(401, "Invalid refresh token");
     }
 
+    // compare with stored token to detect reuse
     if (incomingRefreshToken !== user?.refreshToken) {
       throw new ApiError(401, "Refresh token is expired or used");
     }
 
+    // issue new token pair (old refresh token gets overwritten in DB)
     const { accessToken, refreshToken: newRefreshToken } =
       await generateAccessAndRefreshTokens(user._id);
 

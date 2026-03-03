@@ -1,7 +1,7 @@
+// wraps async route handlers so thrown errors are caught and forwarded to Express error handling
 const asyncHandler = (requestHandler) => {
   return (req, res, next) => {
     Promise.resolve(requestHandler(req, res, next)).catch((err) => {
-      // If the controller throws an error, this safely passes it to your app.js global error handler
       if (typeof next === 'function') {
         next(err);
       } else {

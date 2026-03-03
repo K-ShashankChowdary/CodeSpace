@@ -1,10 +1,7 @@
 import { createClient } from "redis";
 
-/**
- * Redis Client Singleton
- * We create the client here and export it to be used across the app.
- * This prevents opening multiple unnecessary connections.
- */
+// singleton Redis client - used as a job queue for code submissions
+// backend pushes jobs with LPUSH, C++ worker pops them with BRPOP
 const redisClient = createClient({
     url: process.env.REDIS_URI || "redis://localhost:6379"
 });

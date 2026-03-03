@@ -10,22 +10,14 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-//route the POST request for user registration to the registerUser controller
+// public routes
 router.route("/register").post(registerUser);
-
-// route the POST request for user login to the loginUser controller
 router.route("/login").post(loginUser);
+router.route("/refresh-token").post(refreshAccessToken); // no auth needed since access token may be expired
 
-// apply the verifyJWT middleware to ensure only authenticated users can access the logout route
+// protected routes (require valid JWT)
 router.route("/logout").post(verifyJWT, logoutUser);
-
-// route to refresh the access token silently
-router.route("/refresh-token").post(refreshAccessToken);
-
-//create a strictly protected route for the frontend to verify active sessions on initial page load
-router.route("/me").get(verifyJWT, getCurrentUser);
-
-//route to get current-user that is logged in
-router.route("/current-user").get(verifyJWT, getCurrentUser);
+router.route("/me").get(verifyJWT, getCurrentUser);             // used by App.jsx to check if session is valid
+router.route("/current-user").get(verifyJWT, getCurrentUser);   // used by IDE to get username for leaderboard
 
 export default router;

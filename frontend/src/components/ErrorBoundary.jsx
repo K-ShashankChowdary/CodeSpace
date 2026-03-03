@@ -1,5 +1,6 @@
 import React from 'react';
 
+// catches unhandled React errors to prevent the entire app from crashing
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -24,10 +25,7 @@ class ErrorBoundary extends React.Component {
             <pre className="bg-black p-4 rounded-lg text-xs text-red-400 overflow-x-auto border border-zinc-800">
               {this.state.error?.toString()}
             </pre>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="mt-6 bg-zinc-800 hover:bg-zinc-700 px-6 py-2 rounded text-sm font-bold text-white transition-colors"
-            >
+            <button onClick={() => window.location.reload()} className="mt-6 bg-zinc-800 hover:bg-zinc-700 px-6 py-2 rounded text-sm font-bold text-white transition-colors">
               Reload Workspace
             </button>
           </div>

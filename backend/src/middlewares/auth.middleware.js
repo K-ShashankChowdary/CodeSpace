@@ -3,8 +3,9 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
 
+// protects routes by verifying the JWT access token before allowing access
 export const verifyJWT = asyncHandler(async (req, _, next) => {
-  // extract the token from cookies or the Authorization header
+  // try cookies first, fall back to Authorization header
   const token =
     req.cookies?.accessToken ||
     req.header("Authorization")?.replace("Bearer ", "");
@@ -13,13 +14,10 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
     throw new ApiError(401, "Unauthorized request");
   }
 
-  // decode the token using the secret key
   const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 
-  // find the user and attach their info to the request object (excluding password)
-  const user = await User.findById(decodedToken?._id).select(
-    "-password -refreshToken",
-  );
+  // fetch user without sensitive fields and attach to req for downstream use
+  const user = await User.findById(decodedToken?._id).select("-password -refreshToken");
 
   if (!user) {
     throw new ApiError(401, "Invalid Access Token");

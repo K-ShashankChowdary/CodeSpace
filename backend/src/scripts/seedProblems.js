@@ -1,3 +1,4 @@
+// one-time script to seed the database with sample coding problems
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import fs from "fs";
@@ -8,7 +9,7 @@ import { Problem } from "../models/problem.model.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Explicitly point to the backend root .env file
+// point to the backend root .env
 const envPath = path.resolve(__dirname, "../../.env");
 if (!fs.existsSync(envPath)) {
     console.error(`Env file not found at: ${envPath}`);

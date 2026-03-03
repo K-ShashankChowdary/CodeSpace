@@ -8,9 +8,9 @@ const userSchema = new Schema(
       type: String,
       required: true,
       unique: true,
-      lowercase: true,
+      lowercase: true,   // normalizes casing for consistent lookups
       trim: true,
-      index: true,
+      index: true,        // indexed for faster username searches
     },
     email: {
       type: String,
@@ -24,45 +24,38 @@ const userSchema = new Schema(
       required: [true, "Password is required"],
     },
     refreshToken: {
-      type: String,
+      type: String,       // stores the current valid refresh token
     },
   },
   { timestamps: true }
 );
 
-// I use a pure async function here. Modern Mongoose handles the Promise automatically, so we completely remove the 'next' parameter.
+// auto-hash password with bcrypt before saving, only when password changes
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
   this.password = await bcrypt.hash(this.password, 10);
 });
 
+// compares plain-text password against the stored hash
 userSchema.methods.isPasswordCorrect = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
 
+// short-lived token with user identity, used for API authentication
 userSchema.methods.generateAccessToken = function () {
   return jwt.sign(
-    {
-      _id: this._id,
-      email: this.email,
-      username: this.username,
-    },
+    { _id: this._id, email: this.email, username: this.username },
     process.env.ACCESS_TOKEN_SECRET,
-    {
-      expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
-    }
+    { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
   );
 };
 
+// long-lived token with minimal payload, used to renew expired access tokens
 userSchema.methods.generateRefreshToken = function () {
   return jwt.sign(
-    {
-      _id: this._id,
-    },
+    { _id: this._id },
     process.env.REFRESH_TOKEN_SECRET,
-    {
-      expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
-    }
+    { expiresIn: process.env.REFRESH_TOKEN_EXPIRY }
   );
 };
 

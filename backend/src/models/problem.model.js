@@ -17,30 +17,24 @@ const problemSchema = new Schema(
         },
         timeLimit: {
             type: Number,
-            default: 2000, // Default execution time limit in milliseconds
+            default: 2000,      // max execution time in milliseconds
         },
         memoryLimit: {
             type: Number,
-            default: 256, // Default memory limit in megabytes
+            default: 256,       // max memory in MB for the Docker container
         },
         testCases: [
             {
-                input: { 
-                    type: String, 
-                    required: true 
-                },
-                output: { 
-                    type: String, 
-                    required: true 
-                },
+                input: { type: String, required: true },
+                output: { type: String, required: true },
                 isHidden: {
                     type: Boolean,
-                    default: false // Determines if the test case is hidden during initial run
+                    default: false  // hidden test cases only run during "submit", never shown to users
                 }
             },
         ],
     },
-    { timestamps: true } 
+    { timestamps: true }
 );
 
 export const Problem = mongoose.model("Problem", problemSchema);
