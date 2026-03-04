@@ -11,10 +11,17 @@ const createRoom = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Problem selection is mandatory to start a room");
     }
 
-    // 3 random bytes = 6 hex chars (e.g., "A3F1B2")
-    const roomCode = crypto.randomBytes(3).toString("hex").toUpperCase();
+    // retry loop to handle rare room code collisions (3 bytes = 16M possible codes)
+    let roomCode;
+    let room;
+    for (let attempt = 0; attempt < 5; attempt++) {
+        roomCode = crypto.randomBytes(3).toString("hex").toUpperCase();
+        const existing = await Room.findOne({ roomCode, isActive: true });
+        if (!existing) break;
+        if (attempt === 4) throw new ApiError(500, "Failed to generate unique room code");
+    }
 
-    const room = await Room.create({
+    room = await Room.create({
         roomCode,
         host: req.user._id,
         problemId,
@@ -42,8 +49,8 @@ const joinRoom = asyncHandler(async (req, res) => {
         throw new ApiError(404, "This room does not exist or has been closed");
     }
 
-    // prevent duplicate entries on page refresh
-    const isAlreadyParticipant = room.participants.includes(req.user._id);
+    // .includes() uses === which fails on ObjectId references; .equals() compares values
+    const isAlreadyParticipant = room.participants.some(p => p.equals(req.user._id));
 
     if (!isAlreadyParticipant) {
         room.participants.push(req.user._id);

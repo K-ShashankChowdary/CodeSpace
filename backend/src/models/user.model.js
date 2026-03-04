@@ -31,6 +31,7 @@ const userSchema = new Schema(
 );
 
 // auto-hash password with bcrypt before saving, only when password changes
+// Note: Mongoose 7+ async hooks use return/throw, not next()
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
   this.password = await bcrypt.hash(this.password, 10);

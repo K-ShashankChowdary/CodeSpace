@@ -3,6 +3,13 @@ import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
 
+// shared cookie options — single source of truth for login, logout, and token refresh
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: false,      // set to true in production (HTTPS only)
+  sameSite: "lax",
+};
+
 // generates both tokens, saves refresh token to DB for later validation
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -23,8 +30,12 @@ const generateAccessAndRefreshTokens = async (userId) => {
 const registerUser = asyncHandler(async (req, res) => {
   const { username, email, password } = req.body;
 
-  if ([username, email, password].some((field) => field?.trim() === "")) {
+  if (!username || !email || !password) {
     throw new ApiError(400, "All fields are required");
+  }
+
+  if ([username, email, password].some((field) => field.trim() === "")) {
+    throw new ApiError(400, "Fields cannot be empty");
   }
 
   // check for duplicate email or username
@@ -56,7 +67,18 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Username or email is required");
   }
 
-  const user = await User.findOne({ $or: [{ username }, { email }] });
+  if (!password) {
+    throw new ApiError(400, "Password is required");
+  }
+
+  // build query with only the fields that were actually provided,
+  // passing { username: undefined } to $or causes Mongoose to strip it to {},
+  // which matches ALL documents and returns the wrong user
+  const orFilter = [];
+  if (username) orFilter.push({ username });
+  if (email) orFilter.push({ email });
+
+  const user = await User.findOne({ $or: orFilter });
   if (!user) {
     throw new ApiError(404, "User does not exist");
   }
@@ -70,12 +92,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
   const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
-  // httpOnly prevents JS access (XSS protection), secure=false for local dev
-  const options = {
-    httpOnly: true,
-    secure: false,
-    sameSite: "lax",
-  };
+  const options = COOKIE_OPTIONS;
 
   return res
     .status(200)
@@ -96,12 +113,7 @@ const logoutUser = asyncHandler(async (req, res) => {
     { new: true },
   );
 
-  // must match login cookie options exactly or browser won't clear them
-  const options = {
-    httpOnly: true,
-    secure: false,
-    sameSite: "lax",
-  };
+  const options = COOKIE_OPTIONS;
 
   return res
     .status(200)
@@ -146,11 +158,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     const { accessToken, refreshToken: newRefreshToken } =
       await generateAccessAndRefreshTokens(user._id);
 
-    const options = {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-    };
+    const options = COOKIE_OPTIONS;
 
     return res
       .status(200)

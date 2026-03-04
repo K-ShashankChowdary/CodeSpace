@@ -9,7 +9,7 @@ import mongoose from "mongoose";
 const submitCode = asyncHandler(async (req, res) => {
     const { problemId, code, language, executionType } = req.body;
 
-    if ([problemId, code, language].some((field) => field?.trim() === "")) {
+    if ([problemId, code, language].some((field) => !field || field.trim() === "")) {
         throw new ApiError(400, "All fields are required");
     }
 
@@ -58,6 +58,11 @@ const getSubmissionStatus = asyncHandler(async (req, res) => {
 
     if (!submission) {
         throw new ApiError(404, "Submission record not found");
+    }
+
+    // prevent users from viewing other users' submissions (IDOR protection)
+    if (submission.userId.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "You do not have permission to view this submission");
     }
 
     return res.status(200).json(

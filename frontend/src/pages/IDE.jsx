@@ -1,14 +1,18 @@
 import React, { useState, useRef, useEffect } from "react";
-import axios from "axios";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import CodeEditor from "../components/CodeEditor";
 import { io } from "socket.io-client";
+import api from "../services/api";
+import CodeEditor from "../components/CodeEditor";
+import Button from "../components/ui/Button";
+import Spinner from "../components/ui/Spinner";
+import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
 
 // initialized outside component to avoid reconnecting on every re-render
-const socket = io("http://localhost:5000", {
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: false,
-  transports: ["websocket"]
+  transports: ["websocket"],
 });
 
 function IDE() {
@@ -28,6 +32,7 @@ function IDE() {
   const [problem, setProblem] = useState(null);
   const [isFetchingProblem, setIsFetchingProblem] = useState(true);
   const [activeTab, setActiveTab] = useState("description");
+  const activeTabRef = useRef(activeTab); // ref tracks current value for use in async callbacks
   const [history, setHistory] = useState([]);
   const [activeTestCase, setActiveTestCase] = useState(0);
 
@@ -47,25 +52,16 @@ function IDE() {
   useEffect(() => {
     const fetchWorkspaceData = async () => {
       try {
-        const userRes = await axios.get(
-          "http://localhost:5000/api/v1/users/current-user",
-          { withCredentials: true },
-        );
+        const userRes = await api.get("/users/current-user");
         const user = userRes.data.data;
         setCurrentUser(user);
 
-        const probRes = await axios.get(
-          `http://localhost:5000/api/v1/problems/${id}`,
-          { withCredentials: true },
-        );
+        const probRes = await api.get(`/problems/${id}`);
         setProblem(probRes.data.data || null);
 
         // if in a classroom, fetch room details and connect WebSocket
         if (roomCode) {
-          const roomRes = await axios.get(
-            `http://localhost:5000/api/v1/rooms/details/${roomCode}`,
-            { withCredentials: true },
-          );
+          const roomRes = await api.get(`/rooms/details/${roomCode}`);
           const roomData = roomRes.data.data;
           setRoom(roomData);
 
@@ -86,8 +82,13 @@ function IDE() {
 
     fetchWorkspaceData();
 
+    // BUG-1 FIX: clean up both socket AND polling interval on unmount
     return () => {
       if (roomCode) socket.disconnect();
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
     };
   }, [id, roomCode, navigate]);
 
@@ -96,7 +97,6 @@ function IDE() {
     if (!isHost || !roomCode) return;
 
     socket.on("leaderboard-update", (data) => {
-      console.log("📥 TEACHER RECEIVED:", data);
       setLiveStatuses((prev) => ({
         ...prev,
         [data.username]: data.status,
@@ -105,6 +105,11 @@ function IDE() {
 
     return () => socket.off("leaderboard-update");
   }, [isHost, roomCode]);
+
+  // keep ref in sync so polling callbacks always read the latest value
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   // auto-fetch history when switching to submissions tab
   useEffect(() => {
@@ -115,10 +120,7 @@ function IDE() {
 
   const fetchHistory = async () => {
     try {
-      const response = await axios.get(
-        `http://localhost:5000/api/v1/submissions/history/${id}`,
-        { withCredentials: true },
-      );
+      const response = await api.get(`/submissions/history/${id}`);
       setHistory(Array.isArray(response.data.data) ? response.data.data : []);
     } catch (error) {
       setHistory([]);
@@ -127,9 +129,11 @@ function IDE() {
 
   const handleLogout = async () => {
     try {
-      await axios.post("http://localhost:5000/api/v1/users/logout", {}, { withCredentials: true });
+      await api.post("/users/logout");
       window.location.href = "/auth"; // hard reload to wipe React state
-    } catch (error) {}
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
   };
 
   // handles both "run" (visible tests only) and "submit" (all tests)
@@ -143,11 +147,12 @@ function IDE() {
     setActiveTestCase(0);
 
     try {
-      const response = await axios.post(
-        "http://localhost:5000/api/v1/submissions/submit",
-        { problemId: id, language: "cpp", code: code, executionType: type },
-        { withCredentials: true },
-      );
+      const response = await api.post("/submissions/submit", {
+        problemId: id,
+        language: "cpp",
+        code: code,
+        executionType: type,
+      });
       pollJobStatus(response.data.data.jobId, type);
     } catch (error) {
       setStatus("Error");
@@ -162,31 +167,33 @@ function IDE() {
 
     pollingIntervalRef.current = setInterval(async () => {
       try {
-        const response = await axios.get(
-          `http://localhost:5000/api/v1/submissions/status/${jobId}`,
-          { withCredentials: true },
-        );
+        const response = await api.get(`/submissions/status/${jobId}`);
         const jobData = response.data.data;
 
         if (jobData && jobData.status !== "Pending" && jobData.status !== "Executing") {
           clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
           setStatus(jobData.status);
           setOutput(jobData.output || "");
           setIsRunning(false);
           setIsSubmitting(false);
 
-          if (type === "submit" && activeTab === "submissions") {
+          if (type === "submit" && activeTabRef.current === "submissions") {
             fetchHistory();
           }
 
           // broadcast result to teacher's leaderboard in classroom mode
           if (roomCode && currentUser && type === "submit") {
-            console.log("STUDENT EMITTING:", { roomCode, username: currentUser.username, status: jobData.status });
-            socket.emit("student-submission", { roomCode, username: currentUser.username, status: jobData.status });
+            socket.emit("student-submission", {
+              roomCode,
+              username: currentUser.username,
+              status: jobData.status,
+            });
           }
         }
       } catch (error) {
         clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
         setIsRunning(false);
         setIsSubmitting(false);
       }
@@ -199,17 +206,6 @@ function IDE() {
       setCode(submissionCode);
       setActiveTab("description");
     }
-  };
-
-  // maps short codes to human-readable labels
-  const getFullStatus = (statusCode) => {
-    const statusMap = {
-      AC: "Accepted", WA: "Wrong Answer", TLE: "Time Limit Exceeded",
-      RE: "Runtime Error", CE: "Compilation Error", MLE: "Memory Limit Exceeded",
-      IE: "Internal Error", Idle: "Idle", Queued: "Queued",
-      Executing: "Executing", Pending: "Pending", Error: "Error",
-    };
-    return statusMap[statusCode] || statusCode;
   };
 
   // renders test case results or raw output in the console panel
@@ -228,7 +224,9 @@ function IDE() {
     } else if (typeof output === "string" && output.trim().startsWith("[")) {
       try {
         parsedResults = JSON.parse(output);
-      } catch (e) {}
+      } catch (e) {
+        /* not valid JSON, treat as raw output */
+      }
     }
 
     // structured test case results
@@ -298,7 +296,7 @@ function IDE() {
 
     if (typeof output === "string") {
       // replace MongoDB job IDs in filenames with "solution.cpp"
-      cleanedOutput = output.replace(/[a-f0-9]{24}\.cpp/g, "solution.cpp");
+      cleanedOutput = output.replace(/[a-f0-9]{24}(_tc\d+)?\.cpp/g, "solution.cpp");
     } else if (typeof output === "object") {
       cleanedOutput = JSON.stringify(output, null, 2);
     }
@@ -318,9 +316,8 @@ function IDE() {
 
   if (isFetchingProblem)
     return (
-      <div className="h-screen w-screen bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 text-zinc-500 font-bold text-sm uppercase tracking-widest">
-        <div className="w-6 h-6 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin"></div>
-        Loading Workspace
+      <div className="h-screen w-screen bg-[#0a0a0a] flex flex-col items-center justify-center">
+        <Spinner size="sm" label="Loading Workspace" />
       </div>
     );
 
@@ -335,9 +332,9 @@ function IDE() {
               Room Code: <span className="text-white font-bold bg-zinc-800 px-3 py-1 rounded-md">{roomCode}</span>
             </p>
           </div>
-          <button onClick={() => navigate("/")} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-white transition-colors bg-zinc-900 px-4 py-2 rounded-lg border border-zinc-800">
+          <Button variant="secondary" size="sm" onClick={() => navigate("/")}>
             Exit Classroom
-          </button>
+          </Button>
         </header>
 
         <div className="bg-[#0d0d0d] rounded-xl border border-zinc-800 overflow-hidden shadow-2xl">
@@ -371,8 +368,7 @@ function IDE() {
               {room?.participants.length <= 1 && (
                 <tr>
                   <td colSpan="2" className="p-12 text-center">
-                    <div className="w-6 h-6 border-2 border-zinc-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <span className="text-zinc-500 text-[10px] uppercase tracking-widest font-bold">Waiting for students to join</span>
+                    <Spinner size="sm" label="Waiting for students to join" />
                   </td>
                 </tr>
               )}
@@ -406,9 +402,9 @@ function IDE() {
             <div className={`w-2 h-2 rounded-full ${status === "AC" ? "bg-green-500" : status === "Idle" ? "bg-zinc-600" : "bg-yellow-500 animate-pulse"}`}></div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{getFullStatus(status)}</span>
           </div>
-          <button onClick={handleLogout} className="bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20 text-[10px] font-bold px-3 py-1.5 rounded transition-all uppercase tracking-widest">
+          <Button variant="danger" size="sm" onClick={handleLogout}>
             Logout
-          </button>
+          </Button>
         </div>
       </header>
       <div className="flex-1 flex gap-2 p-2 overflow-hidden">
@@ -463,9 +459,7 @@ function IDE() {
                   history.map((sub, i) => (
                     <div key={i} onClick={() => handleRestoreCode(sub.code)} className="bg-[#111] border border-zinc-800 p-4 rounded-xl flex justify-between items-center hover:border-zinc-500 transition-colors cursor-pointer group">
                       <div>
-                        <span className={`text-xs font-bold uppercase tracking-widest ${sub.status === "AC" ? "text-green-500" : "text-red-500"}`}>
-                          {getFullStatus(sub.status)}
-                        </span>
+                        <StatusBadge status={sub.status} />
                         <p className="text-[10px] text-zinc-500 font-mono mt-1 group-hover:text-zinc-300 transition-colors">
                           {new Date(sub.createdAt).toLocaleString()}
                         </p>
@@ -508,13 +502,13 @@ function IDE() {
         <button className="text-[10px] font-bold text-zinc-600 hover:text-white uppercase tracking-widest transition-colors">Output ▴</button>
         <div className="flex items-center gap-3">
           {/* run = visible test cases only */}
-          <button onClick={() => handleExecution("run")} disabled={isRunning || isSubmitting} className="bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-200 px-6 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all border border-zinc-700 disabled:opacity-50">
+          <Button variant="secondary" onClick={() => handleExecution("run")} disabled={isRunning || isSubmitting}>
             {isRunning ? "Running..." : "Run"}
-          </button>
+          </Button>
           {/* submit = all test cases including hidden */}
-          <button onClick={() => handleExecution("submit")} disabled={isRunning || isSubmitting} className="bg-[#2db55d] hover:bg-[#26a150] active:scale-95 text-white px-8 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 shadow-lg shadow-green-900/20">
+          <Button variant="success" onClick={() => handleExecution("submit")} disabled={isRunning || isSubmitting}>
             {isSubmitting ? "Submitting..." : "Submit"}
-          </button>
+          </Button>
         </div>
       </footer>
     </div>

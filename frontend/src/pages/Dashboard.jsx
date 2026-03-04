@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import api from "../services/api";
+import Button from "../components/ui/Button";
+import Spinner from "../components/ui/Spinner";
+import Input from "../components/ui/Input";
 
 function Dashboard() {
   const [problems, setProblems] = useState([]);
@@ -13,7 +16,7 @@ function Dashboard() {
   useEffect(() => {
     const fetchProblems = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/v1/problems", { withCredentials: true });
+        const res = await api.get("/problems");
         setProblems(res.data.data);
       } catch (err) {
         console.error("Error fetching problems:", err);
@@ -28,13 +31,11 @@ function Dashboard() {
   // creates a classroom room and navigates to the teacher's IDE view
   const handleCreateRoom = async (problemId) => {
     try {
-      console.log("Attempting to create room for problem:", problemId);
-      const res = await axios.post("http://localhost:5000/api/v1/rooms/create", { problemId }, { withCredentials: true });
-      console.log("Backend Response:", res.data); 
+      const res = await api.post("/rooms/create", { problemId });
       const { roomCode, problemId: pId } = res.data.data;
       navigate(`/problem/${pId}?room=${roomCode}`);
     } catch (error) {
-      console.error("🔥 FULL ERROR:", error);
+      console.error("Room creation failed:", error);
       alert(error.response?.data?.message || "Failed to create room");
     }
   };
@@ -44,7 +45,7 @@ function Dashboard() {
     e.preventDefault();
     if (!roomCodeInput.trim()) return;
     try {
-      const res = await axios.post("http://localhost:5000/api/v1/rooms/join", { roomCode: roomCodeInput }, { withCredentials: true });
+      const res = await api.post("/rooms/join", { roomCode: roomCodeInput });
       const { problemId, roomCode } = res.data.data;
       navigate(`/problem/${problemId}?room=${roomCode}`);
     } catch (error) {
@@ -55,7 +56,7 @@ function Dashboard() {
 
   const handleLogout = async () => {
     try {
-      await axios.post("http://localhost:5000/api/v1/users/logout", {}, { withCredentials: true });
+      await api.post("/users/logout");
       window.location.href = "/auth";
     } catch (error) {
       console.error("Logout failed:", error);
@@ -66,7 +67,7 @@ function Dashboard() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin"></div>
+        <Spinner size="sm" />
       </div>
     );
   }
@@ -81,10 +82,21 @@ function Dashboard() {
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <form onSubmit={handleJoinRoom} className="flex gap-3">
-              <input className="bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-lg text-sm font-mono focus:border-blue-500 outline-none uppercase placeholder:normal-case transition-colors w-48" placeholder="Enter Room Code" value={roomCodeInput} onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())} maxLength={6} />
-              <button type="submit" disabled={!roomCodeInput.trim()} className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all">Join</button>
+              <Input
+                name="roomCode"
+                placeholder="Enter Room Code"
+                value={roomCodeInput}
+                onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
+                maxLength={6}
+                className="w-48 font-mono uppercase"
+              />
+              <Button type="submit" variant="primary" disabled={!roomCodeInput.trim()}>
+                Join
+              </Button>
             </form>
-            <button onClick={handleLogout} className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-red-400 border border-transparent hover:border-red-500/30 hover:bg-red-500/10 rounded-lg transition-all">Logout</button>
+            <Button variant="ghost" onClick={handleLogout} className="hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10">
+              Logout
+            </Button>
           </div>
         </header>
 
@@ -107,8 +119,12 @@ function Dashboard() {
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => navigate(`/problem/${problem._id}`)} className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all">Solve Alone</button>
-                  <button type="button" onClick={(e) => { e.preventDefault(); handleCreateRoom(problem._id); }} className="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-widest border border-zinc-700 transition-all shadow-lg">Host Room</button>
+                  <Button variant="ghost" onClick={() => navigate(`/problem/${problem._id}`)}>
+                    Solve Alone
+                  </Button>
+                  <Button variant="secondary" onClick={() => handleCreateRoom(problem._id)}>
+                    Host Room
+                  </Button>
                 </div>
               </div>
             ))

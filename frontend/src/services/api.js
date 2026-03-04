@@ -14,7 +14,11 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // skip retry for auth endpoints to prevent infinite loops
+        const skipRetryUrls = ['/users/refresh-token', '/users/logout', '/users/login', '/users/register'];
+        const shouldSkip = skipRetryUrls.some(url => originalRequest.url?.includes(url));
+
+        if (error.response?.status === 401 && !originalRequest._retry && !shouldSkip) {
             originalRequest._retry = true;
 
             try {

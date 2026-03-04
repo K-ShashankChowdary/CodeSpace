@@ -18,10 +18,16 @@ const redisClient = createClient({
 
 redisClient.on("error", (err) => console.log("Redis Client Error", err));
 
-const runCpp = (jobId, code, input) => {
+const runCpp = (jobId, code, input, testIndex) => {
     return new Promise((resolve, reject) => {
-        const fileName = `${jobId}.cpp`;
-        const inputName = `${jobId}.txt`;
+        // sanitize jobId to prevent command injection (only allow alphanumeric + hyphens)
+        if (!/^[a-f0-9]+$/i.test(jobId)) {
+            return resolve({ status: "IE", output: "Invalid job ID format" });
+        }
+
+        const uniqueId = `${jobId}_tc${testIndex}`;
+        const fileName = `${uniqueId}.cpp`;
+        const inputName = `${uniqueId}.txt`;
         const tempDir = path.resolve(__dirname, "temp");
 
         if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
@@ -33,12 +39,16 @@ const runCpp = (jobId, code, input) => {
         fs.writeFileSync(inputPath, input);
 
         const enginePath = path.resolve(__dirname, "../../engine/executor");
-        const command = `${enginePath} ${jobId} "${tempDir}"`;
+        const command = `${enginePath} ${uniqueId} "${tempDir}"`;
 
-        exec(command, (error, stdout, stderr) => {
+        // 30s timeout prevents hang if Docker daemon stalls
+        exec(command, { timeout: 30000 }, (error, stdout, stderr) => {
             try {
                 if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
                 if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+                // also clean up the compiled binary if it exists
+                const binaryPath = path.join(tempDir, "r");
+                if (fs.existsSync(binaryPath)) fs.unlinkSync(binaryPath);
             } catch (cleanupErr) {
                 console.error(`[Job ${jobId}] Cleanup failed:`, cleanupErr);
             }
@@ -73,7 +83,7 @@ const processSubmission = async (submissionStr) => {
             let result;
 
             if (language === "cpp") {
-                result = await runCpp(jobId, code, tc.input);
+                result = await runCpp(jobId, code, tc.input, i);
             } else {
                 result = { status: "IE", output: "Unsupported Language" };
             }

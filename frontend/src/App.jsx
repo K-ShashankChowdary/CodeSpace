@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import axios from "axios";
+import api from "./services/api";
 import Auth from "./pages/Auth";
 import IDE from "./pages/IDE";
 import Dashboard from "./pages/Dashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
+import Spinner from "./components/ui/Spinner";
 
-// send cookies with every request (needed for httpOnly JWT cookies)
-axios.defaults.withCredentials = true;
 
 function App() {
   // null = checking, true = logged in, false = not logged in
@@ -16,8 +15,7 @@ function App() {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        // if the session cookie is valid, /me succeeds and we're authenticated
-        await axios.get("http://localhost:5000/api/v1/users/me");
+        await api.get("/users/me");
         setIsAuthenticated(true);
       } catch (error) {
         setIsAuthenticated(false);
@@ -30,11 +28,8 @@ function App() {
   // loading spinner while checking auth to prevent flash of wrong page
   if (isAuthenticated === null) {
     return (
-      <div className="h-screen w-screen bg-[#050505] flex flex-col items-center justify-center gap-4">
-        <div className="w-8 h-8 border-2 border-zinc-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest">
-          Authenticating
-        </p>
+      <div className="h-screen w-screen bg-[#050505] flex flex-col items-center justify-center">
+        <Spinner size="md" label="Authenticating" />
       </div>
     );
   }
