@@ -46,7 +46,15 @@ function IDE() {
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // notification state
+  const [toast, setToast] = useState(null); // { message, type: 'info' | 'error' }
+
   const pollingIntervalRef = useRef(null);
+
+  const showToast = (message, type = "info", duration = 3000) => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), duration);
+  };
 
   // fetch user, problem, and room data on mount
   useEffect(() => {
@@ -70,7 +78,11 @@ function IDE() {
           }
 
           socket.connect();
-          socket.emit("join-room", roomCode);
+          socket.emit("join-room", {
+            roomCode,
+            username: user.username,
+            userId: user._id
+          });
         }
       } catch (error) {
         console.error("Workspace Load Error:", error);
@@ -103,8 +115,53 @@ function IDE() {
       }));
     });
 
-    return () => socket.off("leaderboard-update");
+    socket.on("student-joined", (student) => {
+      showToast(`Student joined: ${student.username}`, "info");
+      setRoom((prev) => {
+        if (!prev) return prev;
+        // Avoid duplicates if reconnecting
+        if (prev.participants.some(p => p._id === student._id)) return prev;
+        return {
+          ...prev,
+          participants: [...prev.participants, student]
+        };
+      });
+    });
+
+    socket.on("student-left", (student) => {
+      showToast(`Student left: ${student.username}`, "error");
+      setRoom((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          participants: prev.participants.filter(p => p._id !== student._id)
+        };
+      });
+    });
+
+    return () => {
+      socket.off("leaderboard-update");
+      socket.off("student-joined");
+      socket.off("student-left");
+    };
   }, [isHost, roomCode]);
+
+  // student listens for host closing the room
+  useEffect(() => {
+    if (isHost || !roomCode) return;
+
+    const handleRoomClosed = () => {
+      showToast("The host has closed the classroom. Exiting...", "error", 3000);
+      setTimeout(() => {
+        socket.disconnect();
+        navigate("/");
+      }, 3000);
+    };
+
+    socket.on("room-closed", handleRoomClosed);
+
+    return () => socket.off("room-closed", handleRoomClosed);
+  }, [isHost, roomCode, navigate]);
 
   // keep ref in sync so polling callbacks always read the latest value
   useEffect(() => {
@@ -133,6 +190,29 @@ function IDE() {
       window.location.href = "/auth"; // hard reload to wipe React state
     } catch (error) {
       console.error("Logout failed:", error);
+    }
+  };
+
+  const handleCloseRoom = async () => {
+    if (!roomCode) {
+      navigate("/");
+      return;
+    }
+
+    const confirmClose = window.confirm("Are you sure you want to exit and close the classroom for all students?");
+    if (!confirmClose) return;
+
+    try {
+      // tell server to broadcast BEFORE we disconnect our own socket
+      socket.emit("host-closed-room", roomCode);
+      await api.post(`/rooms/close/${roomCode}`);
+    } catch (error) {
+      console.error("Failed to close room:", error);
+    } finally {
+      setTimeout(() => {
+        socket.disconnect();
+        navigate("/");
+      }, 300); // small delay to ensure socket event propagates
     }
   };
 
@@ -324,7 +404,17 @@ function IDE() {
   // TEACHER VIEW - live leaderboard
   if (isHost) {
     return (
-      <div className="min-h-screen bg-[#050505] text-white p-8 font-sans">
+      <div className="min-h-screen bg-[#050505] text-white p-8 font-sans relative">
+        {toast && (
+          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
+            <div className={`px-6 py-3 rounded-xl shadow-2xl border text-sm font-bold tracking-wide flex items-center gap-3 ${
+              toast.type === "error" ? "bg-red-500/20 border-red-500/30 text-red-200" : "bg-blue-500/20 border-blue-500/30 text-blue-200"
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${toast.type === "error" ? "bg-red-500" : "bg-blue-500"} animate-pulse`}></div>
+              {toast.message}
+            </div>
+          </div>
+        )}
         <header className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-4">
           <div>
             <h1 className="text-2xl font-bold text-blue-400">Classroom: {problem?.title}</h1>
@@ -332,7 +422,7 @@ function IDE() {
               Room Code: <span className="text-white font-bold bg-zinc-800 px-3 py-1 rounded-md">{roomCode}</span>
             </p>
           </div>
-          <Button variant="secondary" size="sm" onClick={() => navigate("/")}>
+          <Button variant="secondary" size="sm" onClick={handleCloseRoom}>
             Exit Classroom
           </Button>
         </header>
@@ -381,7 +471,17 @@ function IDE() {
 
   // STUDENT VIEW - full IDE workspace
   return (
-    <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden">
+    <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
+      {toast && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
+          <div className={`px-6 py-3 rounded-xl shadow-2xl border text-sm font-bold tracking-wide flex items-center gap-3 ${
+            toast.type === "error" ? "bg-red-500/20 border-red-500/30 text-red-200" : "bg-blue-500/20 border-blue-500/30 text-blue-200"
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${toast.type === "error" ? "bg-red-500" : "bg-blue-500"} animate-pulse`}></div>
+            {toast.message}
+          </div>
+        </div>
+      )}
       <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
         <div className="flex items-center gap-6">
           <button onClick={() => navigate("/")} className="text-zinc-500 hover:text-white transition-colors text-[11px] font-bold uppercase tracking-widest">

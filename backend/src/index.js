@@ -27,9 +27,26 @@ const startServer = async () => {
             console.log(`🟢 Socket connected: ${socket.id}`);
 
             // student joins a classroom room by code
-            socket.on("join-room", (roomCode) => {
+            socket.on("join-room", (data) => {
+                // handle both old string format and new object format for backward compatibility
+                const roomCode = typeof data === "string" ? data : data.roomCode;
+                const username = typeof data === "string" ? "Unknown" : data.username;
+                const userId = typeof data === "string" ? null : data.userId;
+
                 socket.join(roomCode);
-                console.log(`👤 User joined room: ${roomCode}`);
+                socket.roomCode = roomCode;
+                socket.username = username;
+                socket.userId = userId;
+
+                console.log(`👤 User ${username} joined room: ${roomCode}`);
+                
+                // broadcast to others in the room
+                if (userId) {
+                    socket.to(roomCode).emit("student-joined", {
+                        _id: userId,
+                        username: username
+                    });
+                }
             });
 
             // student finished executing code, broadcast result to the teacher
@@ -38,8 +55,20 @@ const startServer = async () => {
                 socket.to(roomCode).emit("leaderboard-update", { username, status });
             });
 
+            // host closes the classroom
+            socket.on("host-closed-room", (roomCode) => {
+                console.log(`⚠️ Host closed room: ${roomCode}`);
+                socket.to(roomCode).emit("room-closed");
+            });
+
             socket.on("disconnect", () => {
-                console.log(`🔴 Socket disconnected: ${socket.id}`);
+                console.log(`🔴 Socket disconnected: ${socket.id} (User: ${socket.username})`);
+                if (socket.roomCode && socket.userId) {
+                    socket.to(socket.roomCode).emit("student-left", {
+                        _id: socket.userId,
+                        username: socket.username
+                    });
+                }
             });
         });
 
