@@ -78,11 +78,21 @@ function IDE() {
           }
 
           socket.connect();
-          socket.emit("join-room", {
-            roomCode,
-            username: user.username,
-            userId: user._id
-          });
+          
+          // Wait for connection before emitting join-room to prevent dropped events
+          const emitJoinRoom = () => {
+            socket.emit("join-room", {
+              roomCode,
+              username: user.username,
+              userId: user._id,
+              isHost: roomData.host._id === user._id
+            });
+          };
+
+          socket.on("connect", emitJoinRoom);
+          if (socket.connected) {
+            emitJoinRoom();
+          }
         }
       } catch (error) {
         console.error("Workspace Load Error:", error);
@@ -96,6 +106,7 @@ function IDE() {
 
     // BUG-1 FIX: clean up both socket AND polling interval on unmount
     return () => {
+      socket.off("connect"); // clean up all connect listeners
       if (roomCode) socket.disconnect();
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -199,12 +210,11 @@ function IDE() {
       return;
     }
 
-    const confirmClose = window.confirm("Are you sure you want to exit and close the classroom for all students?");
-    if (!confirmClose) return;
+    showToast("Closing classroom for all students...", "error", 2000);
 
+    // tell server to broadcast BEFORE we disconnect our own socket
+    socket.emit("host-closed-room", roomCode);
     try {
-      // tell server to broadcast BEFORE we disconnect our own socket
-      socket.emit("host-closed-room", roomCode);
       await api.post(`/rooms/close/${roomCode}`);
     } catch (error) {
       console.error("Failed to close room:", error);
@@ -212,7 +222,7 @@ function IDE() {
       setTimeout(() => {
         socket.disconnect();
         navigate("/");
-      }, 300); // small delay to ensure socket event propagates
+      }, 2000); // 2-second delay matching toast to ensure socket event propagates and gives visual feedback
     }
   };
 
@@ -484,7 +494,20 @@ function IDE() {
       )}
       <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
         <div className="flex items-center gap-6">
-          <button onClick={() => navigate("/")} className="text-zinc-500 hover:text-white transition-colors text-[11px] font-bold uppercase tracking-widest">
+          <button onClick={() => {
+            if (roomCode) {
+              if (isHost) {
+                handleCloseRoom();
+                return;
+              } else {
+                showToast("Leaving classroom...", "info", 1500);
+                socket.emit("leave-room", roomCode);
+                setTimeout(() => navigate("/"), 1500);
+                return;
+              }
+            }
+            navigate("/");
+          }} className="text-zinc-500 hover:text-white transition-colors text-[11px] font-bold uppercase tracking-widest">
             ‹ Dashboard
           </button>
           <div className="h-4 w-px bg-zinc-800"></div>
@@ -502,6 +525,15 @@ function IDE() {
             <div className={`w-2 h-2 rounded-full ${status === "AC" ? "bg-green-500" : status === "Idle" ? "bg-zinc-600" : "bg-yellow-500 animate-pulse"}`}></div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{getFullStatus(status)}</span>
           </div>
+          {roomCode && !isHost && (
+            <Button variant="secondary" size="sm" onClick={() => {
+              showToast("Leaving classroom...", "info", 1500);
+              socket.emit("leave-room", roomCode);
+              setTimeout(() => navigate("/"), 1500);
+            }}>
+              Exit Classroom
+            </Button>
+          )}
           <Button variant="danger" size="sm" onClick={handleLogout}>
             Logout
           </Button>
