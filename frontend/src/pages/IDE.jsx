@@ -352,26 +352,39 @@ function IDE() {
               >
                 <div className={`w-1.5 h-1.5 rounded-full ${res?.status === "AC" ? "bg-green-500" : "bg-red-500"}`}></div>
                 Case {i + 1}
+                {res?.time !== undefined && (
+                  <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-sm font-medium ${
+                    activeTestCase === i 
+                      ? "bg-zinc-700/50 text-zinc-300" 
+                      : "bg-zinc-800/30 text-zinc-500"
+                  }`}>
+                    {res.time} ms
+                  </span>
+                )}
               </button>
             ))}
           </div>
 
-          <div className="space-y-5">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-zinc-500">Input</span>
-              <div className="bg-zinc-900/80 rounded-lg px-4 py-3 font-mono text-sm text-zinc-300 whitespace-pre-wrap">
+          <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
+            <div>
+              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">Input</span>
+              <div className="bg-zinc-900/50 rounded-lg px-4 py-3 font-mono text-sm text-zinc-300 whitespace-pre-wrap border border-zinc-800/50">
                 {activeRes?.input || "N/A"}
               </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-zinc-500">Output</span>
-              <div className={`bg-zinc-900/80 rounded-lg px-4 py-3 font-mono text-sm whitespace-pre-wrap ${activeRes?.status === "AC" ? "text-zinc-300" : "text-red-400"}`}>
+            <div>
+              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">Output</span>
+              <div className={`rounded-lg px-4 py-3 font-mono text-sm whitespace-pre-wrap ${
+                activeRes?.status === "AC" 
+                  ? "bg-zinc-900/50 text-zinc-300 border border-zinc-800/50" 
+                  : "bg-red-500/10 text-red-400 border border-red-500/20"
+              }`}>
                 {activeRes?.actual || "N/A"}
               </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-zinc-500">Expected</span>
-              <div className="bg-zinc-900/80 rounded-lg px-4 py-3 font-mono text-sm text-zinc-300 whitespace-pre-wrap">
+            <div>
+              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">Expected</span>
+              <div className="bg-zinc-900/50 rounded-lg px-4 py-3 font-mono text-sm text-zinc-300 whitespace-pre-wrap border border-zinc-800/50">
                 {activeRes?.expected || "N/A"}
               </div>
             </div>

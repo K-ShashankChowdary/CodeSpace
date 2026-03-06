@@ -69,11 +69,18 @@ int main(int argc, char *argv[]) {
             string timeoutCmd = "timeout";
         #endif
         
+        string exeName = "r_" + jobId;
+        string timeFileName = "time_" + jobId + ".txt";
+        
         // if input file exists, pipe it as stdin to the compiled binary
-        string dockerRunCmd = "./r";
+        // We use single quotes for the outer sh -c command so that the host shell
+        // does not expand $var. The container's sh will expand $(date +%s%N).
+        string dockerRunCmd = "start=$(date +%s%N); ./" + exeName;
         if (fs::exists(inputPath)) {
             dockerRunCmd += " < " + jobId + ".txt";
         }
+        // compute in milliseconds using nanoseconds scaled down
+        dockerRunCmd += "; exit_code=$?; end=$(date +%s%N); echo $(((end - start) / 1000000)) > " + timeFileName + "; exit $exit_code";
 
         // build the docker run command with all security flags:
         // --rm (auto-cleanup), --network none (no internet), --memory (RAM cap),
@@ -85,8 +92,8 @@ int main(int argc, char *argv[]) {
                      "-v \"" + tempDir.string() + ":/app\" " +
                      "--network none --memory=\"" + MEM_LIMIT + "\" " +
                      "--memory-swap=\"" + MEM_LIMIT + "\" --pids-limit=" + PID_LIMIT + 
-                     " -w /app " + IMAGE + " /bin/sh -c \"g++ -O2 " + 
-                     jobId + ".cpp -o r && " + dockerRunCmd + "\" 2>&1";
+                     " -w /app " + IMAGE + " /bin/sh -c '" + 
+                     "g++ -O2 " + jobId + ".cpp -o " + exeName + " && " + dockerRunCmd + "' 2>&1";
 
         auto start = high_resolution_clock::now();
         current_pipe = popen(cmd.c_str(), "r");
@@ -106,6 +113,27 @@ int main(int argc, char *argv[]) {
         int exit_code = WEXITSTATUS(pclose_status);
         auto end = high_resolution_clock::now();
         long duration = duration_cast<milliseconds>(end - start).count();
+
+        // attempt to read pure execution time from timeFile
+        long exec_duration = duration; // fallback to full process time
+        fs::path timeFile = tempDir / timeFileName;
+        if (fs::exists(timeFile)) {
+            FILE* tf = fopen(timeFile.c_str(), "r");
+            if (tf) {
+                long fetched_time = 0;
+                if (fscanf(tf, "%ld", &fetched_time) == 1) {
+                    exec_duration = fetched_time;
+                }
+                fclose(tf);
+            }
+            fs::remove(timeFile);
+        }
+
+        // clean up the binary created
+        fs::path exeFile = tempDir / exeName;
+        if (fs::exists(exeFile)) {
+            fs::remove(exeFile);
+        }
 
         // determine verdict from exit code and timing
         string status = "AC";
@@ -128,7 +156,7 @@ int main(int argc, char *argv[]) {
         // JSON output consumed by the Node.js worker
         cout << "{"
              << "\"status\":\"" << status << "\","
-             << "\"time_ms\":" << duration << ","
+             << "\"time_ms\":" << exec_duration << ","
              << "\"output\":\"" << json_escape(raw_out) << "\""
              << "}" << endl;
 

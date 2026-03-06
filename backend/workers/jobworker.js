@@ -47,7 +47,7 @@ const runCpp = (jobId, code, input, testIndex) => {
                 if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
                 if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
                 // also clean up the compiled binary if it exists
-                const binaryPath = path.join(tempDir, "r");
+                const binaryPath = path.join(tempDir, `r_${uniqueId}`);
                 if (fs.existsSync(binaryPath)) fs.unlinkSync(binaryPath);
             } catch (cleanupErr) {
                 console.error(`[Job ${jobId}] Cleanup failed:`, cleanupErr);
@@ -88,8 +88,8 @@ const processSubmission = async (submissionStr) => {
                 result = { status: "IE", output: "Unsupported Language" };
             }
 
-            const actual = (result.output || "").split(/\r?\n/).map(l => l.trimEnd()).join("\n").trim();
-            const expected = (tc.output || "").split(/\r?\n/).map(l => l.trimEnd()).join("\n").trim();
+            const actual = (result.output || "").toLowerCase().split(/\r?\n/).map(l => l.trimEnd()).join("\n").trim();
+            const expected = (tc.output || "").toLowerCase().split(/\r?\n/).map(l => l.trimEnd()).join("\n").trim();
             
             let currentStatus = result.status;
 
