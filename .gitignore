@@ -33,7 +33,6 @@ temp/
 
 # Local Databases/Storage
 data/
-db/
 *.sqlite
 
 # IDE/Editor folders
