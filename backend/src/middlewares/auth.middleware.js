@@ -1,7 +1,10 @@
+import dotenv from "dotenv"
 import { User } from "../models/user.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
+
+dotenv.config({path:"./.env"});
 
 // protects routes by verifying the JWT access token before allowing access
 export const verifyJWT = asyncHandler(async (req, _, next) => {

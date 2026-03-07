@@ -1,5 +1,9 @@
+import dotenv from "dotenv"
 import { Server } from "socket.io";
 import { Room } from "../models/room.model.js";
+
+dotenv.config({path:"./.env"});
+
 
 export const initializeSockets = (httpServer) => {
     const io = new Server(httpServer, {
