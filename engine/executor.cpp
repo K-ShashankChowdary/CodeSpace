@@ -19,8 +19,8 @@ const int MAX_OUTPUT_SIZE = 10000;       // caps stdout buffer to 10KB to preven
 const string MEM_LIMIT = "256m";         // limits container memory to 256MB, triggers OOM kill on overflow
 const string CPU_LIMIT = "0.5";          // limits container to half a CPU core
 const string PID_LIMIT = "64";           // blocks fork bombs by capping process count
-const string TIME_LIMIT = "4s";          // max wall-clock time before gtimeout kills the process
-const int THRESHOLD_MS = 3500;           // if killed before 3.5s = MLE, after = TLE
+const string TIME_LIMIT = "10s";          // max wall-clock time before gtimeout kills the process
+const int THRESHOLD_MS = 9500;           // if killed before 3.5s = MLE, after = TLE
 
 // stored globally so signal handler can close it
 FILE* current_pipe = nullptr;
