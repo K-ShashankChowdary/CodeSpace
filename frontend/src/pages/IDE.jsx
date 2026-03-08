@@ -7,51 +7,47 @@ import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
 
+// PROXY CONFIG: Point to root so Vercel tunnels traffic to AWS EC2
 const SOCKET_URL = "/"; 
 
 const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: false,
-  // 2. Ensure the path matches what you put in vercel.json
   path: "/socket.io", 
-  // 3. Allow polling as a fallback (Vercel proxies sometimes prefer starting with polling)
   transports: ["polling", "websocket"], 
 });
 
 function IDE() {
-  // URL and navigation
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const roomCode = searchParams.get("room"); // classroom mode when present
+  const roomCode = searchParams.get("room");
   const navigate = useNavigate();
 
-  // classroom state
+  // Classroom State
   const [room, setRoom] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [isHost, setIsHost] = useState(false);
-  const [liveStatuses, setLiveStatuses] = useState({}); // { username: verdict } for leaderboard
+  const [liveStatuses, setLiveStatuses] = useState({}); 
 
-  // problem and UI state
+  // Problem & IDE State
   const [problem, setProblem] = useState(null);
   const [isFetchingProblem, setIsFetchingProblem] = useState(true);
   const [activeTab, setActiveTab] = useState("description");
-  const activeTabRef = useRef(activeTab); // ref tracks current value for use in async callbacks
+  const activeTabRef = useRef(activeTab); 
   const [history, setHistory] = useState([]);
   const [activeTestCase, setActiveTestCase] = useState(0);
 
   const [code, setCode] = useState(
-    `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n \n \treturn 0;\n}`,
+    `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n \n \treturn 0;\n}`
   );
-
-  // execution state
+  
   const [output, setOutput] = useState("");
   const [status, setStatus] = useState("Idle");
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // notification state
-  const [toast, setToast] = useState(null); // { message, type: 'info' | 'error' }
-
+  // Notification State
+  const [toast, setToast] = useState(null); 
   const pollingIntervalRef = useRef(null);
 
   const showToast = (message, type = "info", duration = 3000) => {
@@ -59,7 +55,7 @@ function IDE() {
     setTimeout(() => setToast(null), duration);
   };
 
-  // fetch user, problem, and room data on mount
+  // --- EFFECT 1: DATA FETCHING & CONNECTION ---
   useEffect(() => {
     const fetchWorkspaceData = async () => {
       try {
@@ -70,32 +66,31 @@ function IDE() {
         const probRes = await api.get(`/problems/${id}`);
         setProblem(probRes.data.data || null);
 
-        // if in a classroom, fetch room details and connect WebSocket
         if (roomCode) {
           const roomRes = await api.get(`/rooms/details/${roomCode}`);
           const roomData = roomRes.data.data;
           setRoom(roomData);
 
-          if (roomData.host._id === user._id) {
-            setIsHost(true);
-          }
-
-          socket.connect();
+          // 🚨 THE FIX: Convert both IDs to strings before comparing to prevent UI swapping
+          const hostId = roomData.host._id.toString();
+          const currentUserId = user._id.toString();
+          const userIsHost = (hostId === currentUserId);
           
-          // Wait for connection before emitting join-room to prevent dropped events
+          setIsHost(userIsHost);
+
           const emitJoinRoom = () => {
             socket.emit("join-room", {
               roomCode,
               username: user.username,
               userId: user._id,
-              isHost: roomData.host._id === user._id
+              isHost: userIsHost
             });
           };
 
           socket.on("connect", emitJoinRoom);
-          if (socket.connected) {
-            emitJoinRoom();
-          }
+          socket.connect();
+          
+          if (socket.connected) emitJoinRoom();
         }
       } catch (error) {
         console.error("Workspace Load Error:", error);
@@ -107,60 +102,54 @@ function IDE() {
 
     fetchWorkspaceData();
 
-    // BUG-1 FIX: clean up both socket AND polling interval on unmount
     return () => {
-      socket.off("connect"); // clean up all connect listeners
+      socket.off("connect"); 
       if (roomCode) socket.disconnect();
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
+      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
     };
   }, [id, roomCode, navigate]);
 
-  // teacher listens for live student submission results
+  // --- EFFECT 2: TEACHER-ONLY NOTIFICATIONS (TOASTS) ---
   useEffect(() => {
-    if (!isHost || !roomCode) return;
+    // 🚨 Exit if not in a room, or if the user is a student. 
+    // This ensures ONLY the teacher sees the toasts.
+    if (!roomCode || !isHost) return;
 
-    socket.on("leaderboard-update", (data) => {
-      setLiveStatuses((prev) => ({
-        ...prev,
-        [data.username]: data.status,
-      }));
-    });
-
-    socket.on("student-joined", (student) => {
+    const handleStudentJoined = (student) => {
       showToast(`Student joined: ${student.username}`, "info");
       setRoom((prev) => {
         if (!prev) return prev;
-        // Avoid duplicates if reconnecting
         if (prev.participants.some(p => p._id === student._id)) return prev;
-        return {
-          ...prev,
-          participants: [...prev.participants, student]
-        };
+        return { ...prev, participants: [...prev.participants, student] };
       });
-    });
+    };
 
-    socket.on("student-left", (student) => {
+    const handleStudentLeft = (student) => {
       showToast(`Student left: ${student.username}`, "error");
-      setRoom((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          participants: prev.participants.filter(p => p._id !== student._id)
-        };
-      });
-    });
+      setRoom((prev) => prev ? ({
+        ...prev,
+        participants: prev.participants.filter(p => p._id !== student._id)
+      }) : null);
+    };
 
+    const handleLeaderboardUpdate = (data) => {
+      setLiveStatuses((prev) => ({ ...prev, [data.username]: data.status }));
+    };
+
+    // Attach listeners (Only happens if isHost is true)
+    socket.on("student-joined", handleStudentJoined);
+    socket.on("student-left", handleStudentLeft);
+    socket.on("leaderboard-update", handleLeaderboardUpdate);
+
+    // Clean up specific handlers
     return () => {
-      socket.off("leaderboard-update");
-      socket.off("student-joined");
-      socket.off("student-left");
+      socket.off("student-joined", handleStudentJoined);
+      socket.off("student-left", handleStudentLeft);
+      socket.off("leaderboard-update", handleLeaderboardUpdate);
     };
   }, [isHost, roomCode]);
 
-  // student listens for host closing the room
+  // --- EFFECT 3: STUDENT-ONLY LISTENERS ---
   useEffect(() => {
     if (isHost || !roomCode) return;
 
@@ -173,35 +162,24 @@ function IDE() {
     };
 
     socket.on("room-closed", handleRoomClosed);
-
     return () => socket.off("room-closed", handleRoomClosed);
   }, [isHost, roomCode, navigate]);
 
-  // keep ref in sync so polling callbacks always read the latest value
-  useEffect(() => {
-    activeTabRef.current = activeTab;
-  }, [activeTab]);
-
-  // auto-fetch history when switching to submissions tab
-  useEffect(() => {
-    if (activeTab === "submissions") {
-      fetchHistory();
-    }
-  }, [activeTab]);
+  // Sync ref for polling and auto-fetch history
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+  useEffect(() => { if (activeTab === "submissions") fetchHistory(); }, [activeTab]);
 
   const fetchHistory = async () => {
     try {
       const response = await api.get(`/submissions/history/${id}`);
       setHistory(Array.isArray(response.data.data) ? response.data.data : []);
-    } catch (error) {
-      setHistory([]);
-    }
+    } catch (error) { setHistory([]); }
   };
 
   const handleLogout = async () => {
     try {
       await api.post("/users/logout");
-      window.location.href = "/auth"; // hard reload to wipe React state
+      window.location.href = "/auth";
     } catch (error) {
       console.error("Logout failed:", error);
     }
@@ -212,10 +190,7 @@ function IDE() {
       navigate("/");
       return;
     }
-
     showToast("Closing classroom for all students...", "error", 2000);
-
-    // tell server to broadcast BEFORE we disconnect our own socket
     socket.emit("host-closed-room", roomCode);
     try {
       await api.post(`/rooms/close/${roomCode}`);
@@ -225,15 +200,13 @@ function IDE() {
       setTimeout(() => {
         socket.disconnect();
         navigate("/");
-      }, 2000); // 2-second delay matching toast to ensure socket event propagates and gives visual feedback
+      }, 2000); 
     }
   };
 
-  // handles both "run" (visible tests only) and "submit" (all tests)
   const handleExecution = async (type) => {
     if (!code.trim()) return;
     type === "run" ? setIsRunning(true) : setIsSubmitting(true);
-
     setStatus("Queued");
     setOutput("Processing...");
     setActiveTab("description");
@@ -254,10 +227,8 @@ function IDE() {
     }
   };
 
-  // polls submission status every 1.5s until a final verdict is reached
   const pollJobStatus = (jobId, type) => {
     if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-
     pollingIntervalRef.current = setInterval(async () => {
       try {
         const response = await api.get(`/submissions/status/${jobId}`);
@@ -275,7 +246,6 @@ function IDE() {
             fetchHistory();
           }
 
-          // broadcast result to teacher's leaderboard in classroom mode
           if (roomCode && currentUser && type === "submit") {
             socket.emit("student-submission", {
               roomCode,
@@ -293,7 +263,6 @@ function IDE() {
     }, 1500);
   };
 
-  // loads past submission code back into the editor
   const handleRestoreCode = (submissionCode) => {
     if (submissionCode) {
       setCode(submissionCode);
@@ -301,28 +270,16 @@ function IDE() {
     }
   };
 
-  // renders test case results or raw output in the console panel
   const renderConsoleContent = () => {
-    if (!output)
-      return (
-        <p className="text-sm font-mono text-zinc-500 italic mt-2">
-          Run code to see output...
-        </p>
-      );
+    if (!output) return <p className="text-sm font-mono text-zinc-500 italic mt-2">Run code to see output...</p>;
 
     let parsedResults = null;
-
     if (Array.isArray(output)) {
       parsedResults = output;
     } else if (typeof output === "string" && output.trim().startsWith("[")) {
-      try {
-        parsedResults = JSON.parse(output);
-      } catch (e) {
-        /* not valid JSON, treat as raw output */
-      }
+      try { parsedResults = JSON.parse(output); } catch (e) {}
     }
 
-    // structured test case results
     if (parsedResults && Array.isArray(parsedResults) && parsedResults.length > 0) {
       const activeRes = parsedResults[activeTestCase] || parsedResults[0] || {};
       const overallStatus = parsedResults.every((r) => r?.status === "AC")
@@ -341,25 +298,20 @@ function IDE() {
               </span>
             )}
           </div>
-
           <div className="flex gap-2 mb-6 overflow-x-auto custom-scrollbar">
             {parsedResults.map((res, i) => (
               <button
                 key={i}
                 onClick={() => setActiveTestCase(i)}
                 className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap ${
-                  activeTestCase === i
-                    ? "bg-zinc-800 text-zinc-100"
-                    : "bg-transparent text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
+                  activeTestCase === i ? "bg-zinc-800 text-zinc-100" : "bg-transparent text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
                 }`}
               >
                 <div className={`w-1.5 h-1.5 rounded-full ${res?.status === "AC" ? "bg-green-500" : "bg-red-500"}`}></div>
                 Case {i + 1}
                 {res?.time !== undefined && (
                   <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-sm font-medium ${
-                    activeTestCase === i 
-                      ? "bg-zinc-700/50 text-zinc-300" 
-                      : "bg-zinc-800/30 text-zinc-500"
+                    activeTestCase === i ? "bg-zinc-700/50 text-zinc-300" : "bg-zinc-800/30 text-zinc-500"
                   }`}>
                     {res.time} ms
                   </span>
@@ -367,7 +319,6 @@ function IDE() {
               </button>
             ))}
           </div>
-
           <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
             <div>
               <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">Input</span>
@@ -378,9 +329,7 @@ function IDE() {
             <div>
               <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">Output</span>
               <div className={`rounded-lg px-4 py-3 font-mono text-sm whitespace-pre-wrap ${
-                activeRes?.status === "AC" 
-                  ? "bg-zinc-900/50 text-zinc-300 border border-zinc-800/50" 
-                  : "bg-red-500/10 text-red-400 border border-red-500/20"
+                activeRes?.status === "AC" ? "bg-zinc-900/50 text-zinc-300 border border-zinc-800/50" : "bg-red-500/10 text-red-400 border border-red-500/20"
               }`}>
                 {activeRes?.actual || "N/A"}
               </div>
@@ -396,12 +345,10 @@ function IDE() {
       );
     }
 
-    // raw output (compilation errors, runtime errors, etc.)
     const isError = ["CE", "RE", "TLE", "WA"].includes(status);
     let cleanedOutput = "Output formatting failed.";
 
     if (typeof output === "string") {
-      // replace MongoDB job IDs in filenames with "solution.cpp"
       cleanedOutput = output.replace(/[a-f0-9]{24}(_tc\d+)?\.cpp/g, "solution.cpp");
     } else if (typeof output === "object") {
       cleanedOutput = JSON.stringify(output, null, 2);
@@ -409,12 +356,8 @@ function IDE() {
 
     return (
       <div className={`p-6 rounded-xl border text-sm leading-relaxed font-mono whitespace-pre-wrap ${isError ? "bg-red-500/5 text-red-400 border-red-500/20 shadow-inner" : "text-zinc-300 border-zinc-800"}`}>
-        {status === "CE" && (
-          <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">Compilation Error</div>
-        )}
-        {status === "RE" && (
-          <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">Runtime Error</div>
-        )}
+        {status === "CE" && <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">Compilation Error</div>}
+        {status === "RE" && <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">Runtime Error</div>}
         {cleanedOutput}
       </div>
     );
@@ -427,7 +370,9 @@ function IDE() {
       </div>
     );
 
-  // TEACHER VIEW - live leaderboard
+  // ==========================================
+  // --- VIEW 1: TEACHER VIEW (Leaderboard) ---
+  // ==========================================
   if (isHost) {
     return (
       <div className="min-h-screen bg-[#050505] text-white p-8 font-sans relative">
@@ -443,7 +388,7 @@ function IDE() {
         )}
         <header className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-4">
           <div>
-            <h1 className="text-2xl font-bold text-blue-400">Classroom: {problem?.title}</h1>
+            <h1 className="text-2xl font-bold text-blue-400">Teacher Dashboard: {problem?.title}</h1>
             <p className="text-zinc-500 font-mono mt-1 flex items-center gap-2">
               Room Code: <span className="text-white font-bold bg-zinc-800 px-3 py-1 rounded-md">{roomCode}</span>
             </p>
@@ -463,7 +408,7 @@ function IDE() {
             </thead>
             <tbody>
               {room?.participants
-                .filter((p) => p._id !== currentUser._id)
+                .filter((p) => p._id.toString() !== currentUser._id.toString())
                 .map((student) => {
                   const currentStatus = liveStatuses[student.username] || "In Progress";
                   let badgeColor = "bg-zinc-800 text-zinc-400 border-zinc-700";
@@ -481,10 +426,10 @@ function IDE() {
                     </tr>
                   );
                 })}
-              {room?.participants.length <= 1 && (
+              {(!room?.participants || room.participants.length <= 1) && (
                 <tr>
-                  <td colSpan="2" className="p-12 text-center">
-                    <Spinner size="sm" label="Waiting for students to join" />
+                  <td colSpan="2" className="p-12 text-center text-zinc-500 italic">
+                    <Spinner size="sm" label="Waiting for students to join..." />
                   </td>
                 </tr>
               )}
@@ -495,32 +440,19 @@ function IDE() {
     );
   }
 
-  // STUDENT VIEW - full IDE workspace
+  // ==========================================
+  // --- VIEW 2: STUDENT VIEW (Full IDE) ---
+  // ==========================================
   return (
     <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
-      {toast && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
-          <div className={`px-6 py-3 rounded-xl shadow-2xl border text-sm font-bold tracking-wide flex items-center gap-3 ${
-            toast.type === "error" ? "bg-red-500/20 border-red-500/30 text-red-200" : "bg-blue-500/20 border-blue-500/30 text-blue-200"
-          }`}>
-            <div className={`w-2 h-2 rounded-full ${toast.type === "error" ? "bg-red-500" : "bg-blue-500"} animate-pulse`}></div>
-            {toast.message}
-          </div>
-        </div>
-      )}
       <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
         <div className="flex items-center gap-6">
           <button onClick={() => {
             if (roomCode) {
-              if (isHost) {
-                handleCloseRoom();
-                return;
-              } else {
-                showToast("Leaving classroom...", "info", 1500);
-                socket.emit("leave-room", roomCode);
-                setTimeout(() => navigate("/"), 1500);
-                return;
-              }
+              showToast("Leaving classroom...", "info", 1500);
+              socket.emit("leave-room", roomCode);
+              setTimeout(() => navigate("/"), 1500);
+              return;
             }
             navigate("/");
           }} className="text-zinc-500 hover:text-white transition-colors text-[11px] font-bold uppercase tracking-widest">
