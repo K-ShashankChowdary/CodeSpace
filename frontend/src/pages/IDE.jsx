@@ -7,12 +7,15 @@ import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
 
-// initialized outside component to avoid reconnecting on every re-render
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+const SOCKET_URL = "/"; 
+
 const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: false,
-  transports: ["websocket"],
+  // 2. Ensure the path matches what you put in vercel.json
+  path: "/socket.io", 
+  // 3. Allow polling as a fallback (Vercel proxies sometimes prefer starting with polling)
+  transports: ["polling", "websocket"], 
 });
 
 function IDE() {
