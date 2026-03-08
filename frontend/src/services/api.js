@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Our main Axios instance. `withCredentials: true` is super important here so it automatically sends our HttpOnly cookies to the backend.
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1',
+    baseURL: import.meta.env.VITE_API_URL || '/api/v1',
     withCredentials: true,
 });
 
