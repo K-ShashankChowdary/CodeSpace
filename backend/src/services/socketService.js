@@ -4,7 +4,6 @@ import { Room } from "../models/room.model.js";
 
 dotenv.config({path:"./.env"});
 
-
 export const initializeSockets = (httpServer) => {
     const io = new Server(httpServer, {
         cors: {
@@ -35,6 +34,7 @@ export const initializeSockets = (httpServer) => {
             
             // broadcast to others in the room
             if (userId) {
+                // INSTANT REAL-TIME UPDATE: Tell teacher a student joined
                 socket.to(roomCode).emit("student-joined", {
                     _id: userId,
                     username: username
@@ -65,7 +65,7 @@ export const initializeSockets = (httpServer) => {
             console.log(`👤 User ${socket.data.username} left room: ${roomCode}`);
             socket.leave(roomCode);
             if (socket.data.userId && socket.data.roomCode === roomCode) {
-                // if host explicitly leaves, broadcast to everyone else to close
+                // if host explicitly leaves via the exit button, broadcast to close
                 if (socket.data.isHost) {
                     socket.to(roomCode).emit("room-closed");
                     try {
@@ -82,6 +82,7 @@ export const initializeSockets = (httpServer) => {
                     const hasOtherConnections = activeSockets.some(s => s.data.userId === socket.data.userId);
 
                     if (!hasOtherConnections) {
+                        // INSTANT REAL-TIME UPDATE: Tell teacher student left
                         socket.to(roomCode).emit("student-left", {
                             _id: socket.data.userId,
                             username: socket.data.username
@@ -101,7 +102,7 @@ export const initializeSockets = (httpServer) => {
             }
         });
 
-        // host closes the classroom
+        // host clicks close room button
         socket.on("host-closed-room", async (roomCode) => {
             console.log(`⚠️ Host closed room: ${roomCode}`);
             socket.to(roomCode).emit("room-closed");
@@ -109,28 +110,17 @@ export const initializeSockets = (httpServer) => {
 
         socket.on("disconnect", async () => {
             console.log(`🔴 Socket disconnected: ${socket.id} (User: ${socket.data.username || 'Unknown'})`);
+            
             if (socket.data.roomCode && socket.data.userId) {
-                if (socket.data.isHost) {
-                    const activeSockets = await io.in(socket.data.roomCode).fetchSockets();
-                    const hasOtherConnections = activeSockets.some(s => s.data.userId === socket.data.userId);
-
-                    if (!hasOtherConnections) {
-                        socket.to(socket.data.roomCode).emit("room-closed");
-                        try {
-                            await Room.updateOne(
-                                { roomCode: socket.data.roomCode, isActive: true },
-                                { isActive: false }
-                            );
-                        } catch (err) {
-                            console.error("DB Update Error on Host Disconnect:", err);
-                        }
-                    }
-                } else {
+                // 🚨 CRITICAL FIX: Only students trigger leave events on disconnect. 
+                // If the teacher disconnects/refreshes, the room survives!
+                if (!socket.data.isHost) {
                     // socket is already out of the room at this point, so checking io.in() works perfectly
                     const activeSockets = await io.in(socket.data.roomCode).fetchSockets();
                     const hasOtherConnections = activeSockets.some(s => s.data.userId === socket.data.userId);
 
                     if (!hasOtherConnections) {
+                        // INSTANT REAL-TIME UPDATE: Tell teacher student disconnected
                         socket.to(socket.data.roomCode).emit("student-left", {
                             _id: socket.data.userId,
                             username: socket.data.username

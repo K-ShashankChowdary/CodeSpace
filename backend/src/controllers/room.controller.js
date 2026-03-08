@@ -11,7 +11,6 @@ const createRoom = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Problem selection is mandatory to start a room");
     }
 
-    // retry loop to handle rare room code collisions (3 bytes = 16M possible codes)
     let roomCode;
     let room;
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -25,11 +24,14 @@ const createRoom = asyncHandler(async (req, res) => {
         roomCode,
         host: req.user._id,
         problemId,
-        participants: [req.user._id]  // host is auto-added as first participant
+        participants: [req.user._id]  
     });
 
+    // 🚨 FIX: Explicitly append 'teacher' role 
+    const responseData = { ...room.toObject(), role: "teacher" };
+
     return res.status(201).json(
-        new ApiResponse(201, room, "Room initialized successfully")
+        new ApiResponse(201, responseData, "Room initialized successfully")
     );
 });
 
@@ -49,7 +51,6 @@ const joinRoom = asyncHandler(async (req, res) => {
         throw new ApiError(404, "This room does not exist or has been closed");
     }
 
-    // .includes() uses === which fails on ObjectId references; .equals() compares values
     const isAlreadyParticipant = room.participants.some(p => p.equals(req.user._id));
 
     if (!isAlreadyParticipant) {
@@ -57,15 +58,20 @@ const joinRoom = asyncHandler(async (req, res) => {
         await room.save();
     }
 
+    // 🚨 FIX: Calculate if this user is the host or a student
+    const isHost = room.host.equals(req.user._id);
+    const calculatedRole = isHost ? "teacher" : "student";
+
+    const responseData = { ...room.toObject(), role: calculatedRole };
+
     return res.status(200).json(
-        new ApiResponse(200, room, "Successfully joined the room")
+        new ApiResponse(200, responseData, "Successfully joined the room")
     );
 });
 
 const getRoomDetails = asyncHandler(async (req, res) => {
     const { roomCode } = req.params;
 
-    // populate usernames so the teacher's leaderboard can display them
     const room = await Room.findOne({ roomCode: roomCode.toUpperCase(), isActive: true })
         .populate("host", "username email")
         .populate("participants", "username email");
@@ -81,7 +87,6 @@ const getRoomDetails = asyncHandler(async (req, res) => {
 
 const closeRoom = asyncHandler(async (req, res) => {
     const { roomCode } = req.params;
-
     const room = await Room.findOne({ roomCode: roomCode.toUpperCase(), isActive: true });
 
     if (!room) {
