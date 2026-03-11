@@ -445,11 +445,21 @@ function IDE() {
   // ==========================================
   return (
     <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
+      {toast && (
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
+          <div className={`px-6 py-3 rounded-xl shadow-2xl border text-sm font-bold tracking-wide flex items-center gap-3 ${
+            toast.type === "error" ? "bg-red-500/20 border-red-500/30 text-red-200" : "bg-blue-500/20 border-blue-500/30 text-blue-200"
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${toast.type === "error" ? "bg-red-500" : "bg-blue-500"} animate-pulse`}></div>
+            {toast.message}
+          </div>
+        </div>
+      )}
       <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
         <div className="flex items-center gap-6">
           <button onClick={() => {
             if (roomCode) {
-              showToast("Leaving classroom...", "info", 1500);
+              showToast("exiting room...", "info", 1500);
               socket.emit("leave-room", roomCode);
               setTimeout(() => navigate("/"), 1500);
               return;
@@ -475,7 +485,7 @@ function IDE() {
           </div>
           {roomCode && !isHost && (
             <Button variant="secondary" size="sm" onClick={() => {
-              showToast("Leaving classroom...", "info", 1500);
+              showToast("exiting room...", "info", 1500);
               socket.emit("leave-room", roomCode);
               setTimeout(() => navigate("/"), 1500);
             }}>
