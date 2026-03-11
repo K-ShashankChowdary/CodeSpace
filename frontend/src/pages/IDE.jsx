@@ -13,8 +13,8 @@ const SOCKET_URL = "https://codespace-api.duckdns.org";
 const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: false,
-  // Allow polling first so we can see the exact HTTP error code
-  transports: ["polling", "websocket"], 
+  //force websocket
+  transports: ["websocket"], 
 });
 
 function IDE() {
