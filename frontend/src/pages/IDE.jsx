@@ -13,10 +13,9 @@ const SOCKET_URL = "https://codespace-api.duckdns.org";
 const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: false,
-  // path: "/socket.io", // You can keep this or remove it if using default
-  transports: ["websocket", "polling"], 
+  // Allow polling first so we can see the exact HTTP error code
+  transports: ["polling", "websocket"], 
 });
-
 
 function IDE() {
   const { id } = useParams();
