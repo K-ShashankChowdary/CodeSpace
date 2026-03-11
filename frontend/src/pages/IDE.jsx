@@ -7,9 +7,8 @@ import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
 
-// PROXY CONFIG: Point to root so Vercel tunnels traffic to AWS EC2
-// This now pulls the full URL from Vercel's env variables
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL; 
+
+const SOCKET_URL = "https://codespace-api.duckdns.org"; 
 
 const socket = io(SOCKET_URL, {
   withCredentials: true,
