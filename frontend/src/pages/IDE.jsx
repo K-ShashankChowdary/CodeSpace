@@ -8,14 +8,16 @@ import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
 
 // PROXY CONFIG: Point to root so Vercel tunnels traffic to AWS EC2
-const SOCKET_URL = "/"; 
+// This now pulls the full URL from Vercel's env variables
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL; 
 
 const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: false,
-  path: "/socket.io", 
-  transports: ["polling", "websocket"], 
+  // path: "/socket.io", // You can keep this or remove it if using default
+  transports: ["websocket", "polling"], 
 });
+
 
 function IDE() {
   const { id } = useParams();
@@ -71,7 +73,7 @@ function IDE() {
           const roomData = roomRes.data.data;
           setRoom(roomData);
 
-          // 🚨 THE FIX: Convert both IDs to strings before comparing to prevent UI swapping
+          //Convert both IDs to strings before comparing to prevent UI swapping
           const hostId = roomData.host._id.toString();
           const currentUserId = user._id.toString();
           const userIsHost = (hostId === currentUserId);
