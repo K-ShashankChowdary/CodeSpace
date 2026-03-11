@@ -3,11 +3,11 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "http://3.27.117.157:5000/api/v1/:path*"
+      "destination": "https://codespace-api.duckdns.org/api/v1/:path*"
     },
     {
       "source": "/socket.io/:path*",
-      "destination": "http://3.27.117.157:5000/socket.io/:path*"
+      "destination": "https://codespace-api.duckdns.org/socket.io/:path*"
     },
     {
       "source": "/(.*)",
