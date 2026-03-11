@@ -14,7 +14,7 @@ const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: false,
   //force websocket
-  transports: ["websocket"], 
+  transports: ["polling","websocket"], 
 });
 
 function IDE() {
