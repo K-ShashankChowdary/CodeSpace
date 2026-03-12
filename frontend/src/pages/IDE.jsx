@@ -424,9 +424,10 @@ function IDE() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {room?.participants
-            .filter((p) => p._id.toString() !== currentUser._id.toString())
+            ?.filter((p) => p && typeof p === 'object' && p._id?.toString() !== currentUser?._id?.toString())
             .map((student) => {
-              const currentStatus = liveStatuses[student.username] || "In Progress";
+              const username = student?.username || "Unknown";
+              const currentStatus = liveStatuses[username] || "In Progress";
               let statusState = "active"; // active, success, error
               if (currentStatus === "AC") statusState = "success";
               else if (currentStatus !== "In Progress") statusState = "error";
@@ -451,10 +452,10 @@ function IDE() {
                         statusState === "error" ? "bg-red-500/10 border-red-500/30 text-red-400" :
                         "bg-zinc-800 border-zinc-700 text-zinc-300"
                       }`}>
-                        {student.username.charAt(0).toUpperCase()}
+                        {username.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <h3 className="text-zinc-100 font-bold truncate max-w-[120px]" title={student.username}>{student.username}</h3>
+                        <h3 className="text-zinc-100 font-bold truncate max-w-[120px]" title={username}>{username}</h3>
                         <p className="text-zinc-500 text-xs font-mono">User</p>
                       </div>
                     </div>
