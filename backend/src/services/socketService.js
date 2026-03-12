@@ -1,5 +1,6 @@
 import dotenv from "dotenv"
 import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
 import { Room } from "../models/room.model.js";
 
 dotenv.config({path:"./.env"});
