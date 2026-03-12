@@ -182,6 +182,12 @@ function IDE() {
 
   const handleLogout = async () => {
     try {
+      if (socket.connected) {
+        socket.disconnect();
+      }
+      // 🚨 CRITICAL: Clear the token so the socket doesn't auto-connect on the login page
+      localStorage.removeItem("accessToken");
+      
       await api.post("/users/logout");
       window.location.href = "/auth";
     } catch (error) {

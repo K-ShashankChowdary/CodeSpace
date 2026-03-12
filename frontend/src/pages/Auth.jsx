@@ -29,7 +29,14 @@ const Auth = () => {
         ? { email: formData.email, password: formData.password }
         : formData;
 
-      await api.post(endpoint, payload);
+      // 🚨 FIX 1: Capture the response from the API
+      const response = await api.post(endpoint, payload);
+
+      // 🚨 FIX 2: Save the token to localStorage for Socket.io to use
+      const token = response.data?.data?.accessToken;
+      if (token) {
+        localStorage.setItem("accessToken", token);
+      }
 
       if (isLogin) {
         showToast("Logged in successfully!", "success");
@@ -104,7 +111,10 @@ const Auth = () => {
           <button
             type="button"
             className="text-blue-500 font-semibold hover:text-blue-400 transition-colors focus:outline-none"
-            onClick={() => { setIsLogin(!isLogin); setError(""); }}
+            onClick={() => { 
+              setIsLogin(!isLogin); 
+              setToast(null); // Fixed undefined setError bug
+            }}
           >
             {isLogin ? "Sign up" : "Log in"}
           </button>
