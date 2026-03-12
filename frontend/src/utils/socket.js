@@ -1,3 +1,4 @@
+// frontend/src/utils/socket.js
 import { io } from "socket.io-client";
 
 const getSocketUrl = () => {
@@ -14,14 +15,13 @@ const SOCKET_URL = getSocketUrl();
 
 export const socket = io(SOCKET_URL, {
   withCredentials: true,
-  autoConnect: false, // 🚨 Prevent connecting before login
-  transports: ["polling", "websocket"]
+  autoConnect: false,
+  transports: ["polling", "websocket"],
+  // 🚨 THIS IS THE KEY: It sends the token from your screenshot to the backend
+  auth: (cb) => {
+    cb({ token: localStorage.getItem("accessToken") });
+  }
 });
 
-socket.on("connect", () => {
-  console.log(`[Socket] Connected to ${SOCKET_URL} with ID: ${socket.id}`);
-});
-
-socket.on("connect_error", (err) => {
-  console.error(`[Socket] Connection Error:`, err.message);
-});
+socket.on("connect", () => console.log(`[Socket] Connected: ${socket.id}`));
+socket.on("connect_error", (err) => console.error(`[Socket] Error:`, err.message));
