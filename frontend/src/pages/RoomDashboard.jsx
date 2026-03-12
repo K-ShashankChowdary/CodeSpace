@@ -82,13 +82,24 @@ function RoomDashboard() {
         // Join socket room for live updates
         const userIsHost = roomData.host._id.toString() === user._id.toString();
         setIsHost(userIsHost);
-        socket.emit("join-room", {
-          roomCode,
-          username: user.username,
-          userId: user._id,
-          isHost: userIsHost
-        });
+
+        const emitJoinRoom = () => {
+          console.log("[RoomDashboard Socket] Emitting join-room for:", roomCode);
+          socket.emit("join-room", {
+            roomCode,
+            username: user.username,
+            userId: user._id,
+            isHost: userIsHost
+          });
+        };
+
+        socket.on("connect", emitJoinRoom);
         socket.connect();
+        
+        // If it was already connected from a previous page
+        if (socket.connected) {
+          emitJoinRoom();
+        }
 
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load classroom details.");
