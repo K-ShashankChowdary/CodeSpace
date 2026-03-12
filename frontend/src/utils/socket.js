@@ -15,7 +15,7 @@ const SOCKET_URL = getSocketUrl();
 export const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: false, // 🚨 Prevent connecting before login
-  transports: ["websocket", "polling"] // Good fallback to have
+  transports: ["polling", "websocket"]
 });
 
 socket.on("connect", () => {
