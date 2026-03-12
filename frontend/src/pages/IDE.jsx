@@ -5,7 +5,7 @@ import CodeEditor from "../components/CodeEditor";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
-import { LogOut } from "lucide-react";
+import { LogOut, Play } from "lucide-react";
 import Toast from "../components/ui/Toast";
 import { socket } from "../utils/socket";
 
@@ -15,13 +15,11 @@ function IDE() {
   const roomCode = searchParams.get("room");
   const navigate = useNavigate();
 
-  // Classroom State
   const [room, setRoom] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [isHost, setIsHost] = useState(false);
   const [liveStatuses, setLiveStatuses] = useState({}); 
 
-  // Problem & IDE State
   const [problem, setProblem] = useState(null);
   const [isFetchingProblem, setIsFetchingProblem] = useState(true);
   const [activeTab, setActiveTab] = useState("description");
@@ -29,151 +27,115 @@ function IDE() {
   const [history, setHistory] = useState([]);
   const [activeTestCase, setActiveTestCase] = useState(0);
 
-  const [code, setCode] = useState(
-    `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n \n \treturn 0;\n}`
-  );
-  
+  const [code, setCode] = useState(`#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n \n \treturn 0;\n}`);
   const [output, setOutput] = useState("");
   const [status, setStatus] = useState("Idle");
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Notification State
   const [toast, setToast] = useState(null); 
   const pollingIntervalRef = useRef(null);
 
-  const showToast = (message, type = "info") => {
-    setToast({ message, type });
-  };
+  const showToast = (message, type = "info") => setToast({ message, type });
 
-  // --- EFFECT 1: DATA FETCHING & HYDRATION ---
   useEffect(() => {
-    if (!socket.connected) {
-      socket.connect();
-    }
+    if (!socket.connected) socket.connect();
+
     const fetchWorkspaceData = async () => {
       try {
-        const userRes = await api.get("/users/current-user");
+        const [userRes, probRes] = await Promise.all([
+          api.get("/users/current-user"),
+          api.get(`/problems/${id}`)
+        ]);
         const user = userRes.data.data;
         setCurrentUser(user);
-
-        const probRes = await api.get(`/problems/${id}`);
         setProblem(probRes.data.data || null);
 
         if (roomCode) {
           const roomRes = await api.get(`/rooms/details/${roomCode}`);
           const roomData = roomRes.data.data;
           setRoom(roomData);
+          setIsHost(roomData.host._id.toString() === user._id.toString());
 
-          const hostId = roomData.host._id.toString();
-          const currentUserId = user._id.toString();
-          const userIsHost = (hostId === currentUserId);
-          
-          setIsHost(userIsHost);
-
-          // 🚨 LOGIC ADDED: Restore persistent statuses from DB
           const initialStatuses = {};
-          if (roomData.studentProgress && Array.isArray(roomData.studentProgress)) {
+          if (roomData.studentProgress && roomData.participants) {
             roomData.studentProgress.forEach((progress) => {
-              const student = roomData.participants?.find(p => p._id === progress.studentId);
+              const student = roomData.participants.find(p => (p._id.toString() === progress.studentId.toString()) || (p === progress.studentId));
               const statusForThisProblem = progress.results[id];
-              if (student && statusForThisProblem) {
+              if (student && student.username && statusForThisProblem) {
                 initialStatuses[student.username] = statusForThisProblem;
               }
             });
           }
           setLiveStatuses(initialStatuses);
-
-          const emitJoinRoom = () => {
-            socket.emit("join-room", {
-              roomCode,
-              username: user.username,
-              userId: user._id,
-              isHost: userIsHost
-            });
-          };
-
-          socket.on("connect", emitJoinRoom);
-          if (socket.connected) emitJoinRoom();
+          socket.emit("join-room", { roomCode });
         }
-      } catch (error) {
-        console.error("Workspace Load Error:", error);
-        navigate("/");
-      } finally {
-        setIsFetchingProblem(false);
-      }
+      } catch (error) { navigate("/"); } finally { setIsFetchingProblem(false); }
     };
-
     fetchWorkspaceData();
-
     return () => {
       socket.off("connect"); 
-      socket.off("student-joined");
-      socket.off("student-left");
-      socket.off("leaderboard-update");
-      socket.off("sync-entire-leaderboard"); // Cleanup logic added
-      socket.off("room-closed");
       if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
     };
   }, [id, roomCode, navigate]);
 
-  // --- EFFECT 2: TEACHER-ONLY LISTENERS ---
   useEffect(() => {
     if (!roomCode || !isHost) return;
 
-    // 🚨 LOGIC ADDED: Handle the full data dump from the server
     const handleFullSync = (allProgress) => {
       const newStatuses = {};
       allProgress.forEach(prog => {
-        const student = room?.participants?.find(p => p._id === prog.studentId);
-        if (student && prog.results[id]) {
-          newStatuses[student.username] = prog.results[id];
-        }
+        const student = room?.participants?.find(p => p._id.toString() === prog.studentId.toString());
+        if (student && prog.results[id]) newStatuses[student.username] = prog.results[id];
       });
-      setLiveStatuses(newStatuses);
+      setLiveStatuses(prev => ({ ...prev, ...newStatuses }));
     };
 
-    const handleStudentJoined = (student) => {
-      setRoom((prev) => {
-        if (!prev) return prev;
-        if (prev.participants?.some(p => p._id === student._id)) return prev;
-        showToast(`Student joined: ${student.username}`, "info");
-        return { ...prev, participants: [...prev.participants, student] };
-      });
-    };
-
-    const handleStudentLeft = (student) => {
-      showToast(`Student left: ${student.username}`, "error");
-      setRoom((prev) => prev ? ({
-        ...prev,
-        participants: prev.participants.filter(p => p._id !== student._id)
-      }) : null);
-    };
-
-    const handleLeaderboardUpdate = (data) => {
+    const handleUpdate = (data) => {
       if (data.problemId === id) {
         setLiveStatuses((prev) => {
-          // 🚨 STICKY AC LOGIC: If status is already Accepted, don't downgrade it
           if (prev[data.username] === "AC") return prev;
           return { ...prev, [data.username]: data.status };
         });
       }
     };
 
+    const handleStudentJoined = (student) => {
+      setRoom((prev) => {
+        if (!prev) return prev;
+        const exists = prev.participants?.some(p => p._id.toString() === student._id.toString());
+        if (!exists) {
+          showToast(`Student joined: ${student.username}`, "info");
+          return { ...prev, participants: [...(prev.participants || []), student] };
+        }
+        return prev;
+      });
+    };
+
+    // 🚨 STUDENT LEFT LISTENER
+    const handleStudentLeft = (student) => {
+      showToast(`Student left: ${student.username}`, "error");
+      setRoom((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          participants: prev.participants.filter(p => p._id.toString() !== student._id.toString())
+        };
+      });
+    };
+
     socket.on("sync-entire-leaderboard", handleFullSync);
+    socket.on("leaderboard-update", handleUpdate);
     socket.on("student-joined", handleStudentJoined);
     socket.on("student-left", handleStudentLeft);
-    socket.on("leaderboard-update", handleLeaderboardUpdate);
 
     return () => {
-      socket.off("sync-entire-leaderboard", handleFullSync);
-      socket.off("student-joined", handleStudentJoined);
-      socket.off("student-left", handleStudentLeft);
-      socket.off("leaderboard-update", handleLeaderboardUpdate);
+      socket.off("sync-entire-leaderboard");
+      socket.off("leaderboard-update");
+      socket.off("student-joined");
+      socket.off("student-left");
     };
   }, [isHost, roomCode, id, room]);
 
-  // --- EFFECT 3: STUDENT-ONLY LISTENERS ---
   useEffect(() => {
     if (isHost || !roomCode) return;
     const handleRoomClosed = () => {
@@ -195,35 +157,20 @@ function IDE() {
   };
 
   const handleLogout = async () => {
-    try {
-      if (socket.connected) socket.disconnect();
-      localStorage.removeItem("accessToken");
-      await api.post("/users/logout");
-      window.location.href = "/auth";
-    } catch (error) { console.error(error); }
-  };
-
-  const handleCloseRoom = async () => {
-    if (!roomCode) return navigate("/");
-    showToast("Closing classroom...", "error", 2000);
-    socket.emit("host-closed-room", roomCode);
-    try { await api.post(`/rooms/close/${roomCode}`); } 
-    finally { setTimeout(() => navigate("/"), 2000); }
+    if (socket.connected) socket.disconnect();
+    localStorage.removeItem("accessToken");
+    await api.post("/users/logout");
+    window.location.href = "/auth";
   };
 
   const handleExecution = async (type) => {
     if (!code.trim()) return;
     type === "run" ? setIsRunning(true) : setIsSubmitting(true);
     setStatus("Queued"); setOutput("Processing...");
-    setActiveTab("description"); setActiveTestCase(0);
     try {
-      const response = await api.post("/submissions/submit", {
-        problemId: id, language: "cpp", code, executionType: type
-      });
+      const response = await api.post("/submissions/submit", { problemId: id, language: "cpp", code, executionType: type });
       pollJobStatus(response.data.data.jobId, type);
-    } catch (error) {
-      setStatus("Error"); setIsRunning(false); setIsSubmitting(false);
-    }
+    } catch (error) { setIsRunning(false); setIsSubmitting(false); }
   };
 
   const pollJobStatus = (jobId, type) => {
@@ -237,134 +184,60 @@ function IDE() {
           setStatus(jobData.status); setOutput(jobData.output || "");
           setIsRunning(false); setIsSubmitting(false);
           if (type === "submit" && roomCode && currentUser) {
-            socket.emit("student-submission", {
-              roomCode, username: currentUser.username, status: jobData.status, problemId: id
-            });
+            socket.emit("student-submission", { roomCode, username: currentUser.username, status: jobData.status, problemId: id });
           }
         }
-      } catch (error) {
-        clearInterval(pollingIntervalRef.current);
-        setIsRunning(false); setIsSubmitting(false);
-      }
+      } catch (error) { clearInterval(pollingIntervalRef.current); setIsRunning(false); setIsSubmitting(false); }
     }, 1500);
-  };
-
-  const handleRestoreCode = (submissionCode) => {
-    if (submissionCode) { setCode(submissionCode); setActiveTab("description"); }
   };
 
   const renderConsoleContent = () => {
     if (!output) return <p className="text-sm font-mono text-zinc-500 italic mt-2">Run code to see output...</p>;
-    let parsedResults = null;
-    if (Array.isArray(output)) parsedResults = output;
-    else if (typeof output === "string" && output.trim().startsWith("[")) {
-      try { parsedResults = JSON.parse(output); } catch (e) {}
-    }
-
-    if (parsedResults && Array.isArray(parsedResults) && parsedResults.length > 0) {
-      const activeRes = parsedResults[activeTestCase] || parsedResults[0] || {};
-      const overallStatus = parsedResults.every((r) => r?.status === "AC") ? "AC" : 
-                            parsedResults.find((r) => r?.status !== "AC")?.status || "WA";
-
-      return (
-        <div className="flex flex-col animate-in fade-in duration-300">
-          <div className="mb-6 flex items-baseline gap-4">
-            <h2 className={`text-2xl tracking-tight font-bold ${overallStatus === "AC" ? "!text-green-500" : "!text-red-500"}`}>
-              {getFullStatus(overallStatus)}
-            </h2>
-            {overallStatus === "AC" && activeRes?.time !== undefined && (
-              <span className="text-sm font-medium text-zinc-500">
-                Runtime: {Math.max(...parsedResults.map((r) => r.time || 0))} ms
-              </span>
-            )}
-          </div>
-          <div className="flex gap-2 mb-6 overflow-x-auto custom-scrollbar">
-            {parsedResults.map((res, i) => (
-              <button key={i} onClick={() => setActiveTestCase(i)} className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap ${activeTestCase === i ? "bg-zinc-800 text-zinc-100" : "bg-transparent text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${res?.status === "AC" ? "bg-green-500" : "bg-red-500"}`}></div>
-                Case {i + 1}
-              </button>
-            ))}
-          </div>
-          <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
-            <div>
-              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">Input</span>
-              <div className="bg-zinc-900/50 rounded-lg px-4 py-3 font-mono text-sm text-zinc-300 whitespace-pre-wrap border border-zinc-800/50">{activeRes?.input || "N/A"}</div>
-            </div>
-            <div>
-              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">Output</span>
-              <div className={`rounded-lg px-4 py-3 font-mono text-sm whitespace-pre-wrap ${activeRes?.status === "AC" ? "bg-zinc-900/50 text-zinc-300 border border-zinc-800/50" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>{activeRes?.actual || "N/A"}</div>
-            </div>
-            <div>
-              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">Expected</span>
-              <div className="bg-zinc-900/50 rounded-lg px-4 py-3 font-mono text-sm text-zinc-300 whitespace-pre-wrap border border-zinc-800/50">{activeRes?.expected || "N/A"}</div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    const isError = ["CE", "RE", "TLE", "WA"].includes(status);
-    let cleanedOutput = typeof output === "string" ? output.replace(/[a-f0-9]{24}(_tc\d+)?\.cpp/g, "solution.cpp") : JSON.stringify(output);
-    let outputColorClass = (status === "AC" || cleanedOutput.toLowerCase().includes("accepted")) ? "!text-green-500 font-bold" : (isError ? "!text-red-500 font-bold" : "text-zinc-300");
-
-    return (
-      <div className={`p-6 rounded-xl border text-sm leading-relaxed font-mono whitespace-pre-wrap ${isError ? "bg-red-500/5 border-red-500/20 shadow-inner" : "border-zinc-800"} ${outputColorClass}`}>
-        {status === "CE" && <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">Compilation Error</div>}
-        {status === "RE" && <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">Runtime Error</div>}
-        {cleanedOutput}
-      </div>
-    );
+    return <div className="text-zinc-300 font-mono text-sm whitespace-pre-wrap">{typeof output === 'string' ? output : JSON.stringify(output)}</div>;
   };
 
-  if (isFetchingProblem) return <div className="h-screen w-screen bg-[#0a0a0a] flex flex-col items-center justify-center"><Spinner size="sm" label="Loading Workspace" /></div>;
+  const handleRestoreCode = (submissionCode) => { if (submissionCode) { setCode(submissionCode); setActiveTab("description"); } };
+
+  if (isFetchingProblem) return <div className="h-screen bg-[#0a0a0a] flex items-center justify-center"><Spinner size="sm" label="Syncing Leaderboard..." /></div>;
 
   return (
     <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
       {isHost ? (
-        /* --- TEACHER VIEW --- */
         <div className="min-h-screen bg-[#050505] text-white p-8 font-sans relative">
           <header className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-6">
             <div className="flex items-center gap-6">
               <button onClick={() => navigate(`/room/${roomCode}`)} className="flex items-center gap-2 group text-zinc-500 hover:text-white transition-colors">
-                <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 group-hover:border-blue-500/50 group-hover:shadow-[0_0_15px_rgba(37,99,235,0.2)] transition-all">
+                <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 group-hover:border-blue-500/50 transition-all">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
                 </div>
                 <span className="text-[10px] font-bold uppercase tracking-widest">Return to Room</span>
               </button>
-              <h1 className="text-xl font-bold flex items-center gap-3"><span className="text-blue-400">Live Leaderboard:</span><span className="text-white">{problem?.title}</span></h1>
+              <h1 className="text-xl font-bold flex gap-3"><span className="text-blue-400">Live Leaderboard:</span><span className="text-white">{problem?.title}</span></h1>
             </div>
             <Button variant="ghost" size="sm" onClick={handleLogout} className="text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">Logout</Button>
           </header>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {room?.participants?.filter((p) => p?._id?.toString() !== currentUser?._id?.toString()).map((student) => {
-              const username = student?.username || "Unknown";
-              const currentStatus = liveStatuses[username] || "In Progress";
-              let statusState = "active";
-              const lowerStatus = currentStatus.toLowerCase();
-              if (lowerStatus === "ac" || lowerStatus === "accepted") statusState = "success";
-              else if (currentStatus !== "In Progress" && currentStatus !== "Pending" && currentStatus !== "Executing") statusState = "error";
-
+            {room?.participants?.filter(p => p?._id?.toString() !== currentUser?._id?.toString()).map((student) => {
+              const statusStr = liveStatuses[student.username] || "In Progress";
+              const isAC = statusStr === "AC";
+              const isError = ["WA", "TLE", "RE", "CE"].includes(statusStr);
               return (
-                <div key={student._id} className={`bg-[#0a0a0a] border rounded-2xl p-6 relative overflow-hidden transition-all duration-300 shadow-lg ${statusState === "success" ? "border-green-500/30 hover:border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]" : statusState === "error" ? "border-red-500/30 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]" : "border-zinc-800/80 hover:border-blue-500/30"}`}>
-                  <div className={`absolute -top-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-20 pointer-events-none transition-colors duration-1000 ${statusState === "success" ? "bg-green-500" : statusState === "error" ? "bg-red-500" : "bg-blue-500"}`}></div>
+                <div key={student._id} className={`bg-[#0a0a0a] border rounded-2xl p-6 relative overflow-hidden transition-all duration-300 shadow-lg ${isAC ? "border-green-500/30" : isError ? "border-red-500/30" : "border-zinc-800"}`}>
+                  <div className={`absolute -top-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-20 transition-colors duration-1000 ${isAC ? "bg-green-500" : isError ? "bg-red-500" : "bg-blue-500"}`}></div>
                   <div className="flex justify-between items-start mb-4 relative z-10">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg border ${statusState === "success" ? "bg-green-500/10 border-green-500/30 !text-green-500" : statusState === "error" ? "bg-red-500/10 border-red-500/30 !text-red-500" : "bg-zinc-800 border-zinc-700 text-zinc-300"}`}>{username.charAt(0).toUpperCase()}</div>
-                      <div>
-                        <h3 className="text-zinc-100 font-bold truncate max-w-[120px]">{username}</h3>
-                        <p className="text-zinc-500 text-xs font-mono">User</p>
-                      </div>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg border ${isAC ? "bg-green-500/10 border-green-500/30 !text-green-500" : isError ? "bg-red-500/10 border-red-500/30 !text-red-500" : "bg-zinc-800 border-zinc-700 text-zinc-300"}`}>{student.username?.charAt(0).toUpperCase()}</div>
+                      <div><h3 className="text-zinc-100 font-bold truncate max-w-[120px]">{student.username}</h3><p className="text-zinc-500 text-xs font-mono">User</p></div>
                     </div>
                   </div>
                   <div className="mt-6 relative z-10">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 block">Live Status</span>
-                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${statusState === "success" ? "bg-green-500/10 border-green-500/20 !text-green-500" : statusState === "error" ? "bg-red-500/10 border-red-500/20 !text-red-500" : "bg-blue-500/10 border-blue-500/20 !text-blue-500"}`}>
-                      <div className={`w-2 h-2 rounded-full ${statusState === "success" ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" : statusState === "error" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-pulse"}`}></div>
-                      <span className="text-xs font-bold tracking-wide">{getFullStatus(currentStatus)}</span>
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isAC ? "bg-green-500/10 border-green-500/20 !text-green-500" : isError ? "bg-red-500/10 border-red-500/20 !text-red-500" : "bg-blue-500/10 border-blue-500/20 !text-blue-500"}`}>
+                      <div className={`w-2 h-2 rounded-full ${isAC ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" : isError ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : "bg-blue-500 animate-pulse"}`}></div>
+                      <span className="text-xs font-bold tracking-wide">{getFullStatus(statusStr)}</span>
                     </div>
                   </div>
                 </div>
@@ -373,12 +246,12 @@ function IDE() {
           </div>
         </div>
       ) : (
-        /* --- STUDENT VIEW --- */
+        /* STUDENT VIEW (Restored full layout) */
         <div className="flex-1 flex flex-col overflow-hidden">
           <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
             <div className="flex items-center gap-6">
               <button onClick={() => navigate(roomCode ? `/room/${roomCode}` : "/")} className="flex items-center gap-2 group text-zinc-500 hover:text-white transition-colors">
-                <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 group-hover:border-zinc-700 transition-all">
+                <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 transition-all">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
                 </div>
                 <span className="text-[10px] font-bold uppercase tracking-widest">{roomCode ? "Return to Room" : "Dashboard"}</span>
@@ -394,16 +267,15 @@ function IDE() {
                 </div>
               </div>
               <Button variant="ghost" size="sm" onClick={handleLogout} className="bg-red-500/5 hover:bg-red-500/20 text-red-400 hover:text-white border border-red-500/20 gap-2 flex items-center px-4 rounded-xl backdrop-blur-md h-10 shadow-[0_8px_32px_rgba(239,68,68,0.1)]">
-                <LogOut className="w-3.5 h-3.5 transition-transform" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>
+                <LogOut className="w-3.5 h-3.5 transition-transform" /><span className="text-[10px] font-black uppercase tracking-widest">Logout</span>
               </Button>
             </div>
           </header>
           <div className="flex-1 flex gap-2 p-2 overflow-hidden">
             <div className="w-5/12 bg-[#0d0d0d] rounded-xl flex flex-col border border-zinc-800 shadow-xl overflow-hidden">
               <div className="bg-[#141414] flex shrink-0 border-b border-zinc-800/50 px-2">
-                <button onClick={() => setActiveTab("description")} className={`text-[10px] font-bold uppercase tracking-widest px-6 py-3 transition-all ${activeTab === "description" ? "text-white border-b-2" : "text-zinc-500 hover:text-zinc-300"}`}>Problem</button>
-                <button onClick={() => setActiveTab("submissions")} className={`text-[10px] font-bold uppercase tracking-widest px-6 py-3 transition-all ${activeTab === "submissions" ? "text-white border-b-2" : "text-zinc-500 hover:text-zinc-300"}`}>Submissions</button>
+                <button onClick={() => setActiveTab("description")} className={`text-[10px] font-bold uppercase tracking-widest px-6 py-3 transition-all ${activeTab === "description" ? "text-white border-b-2 border-white" : "text-zinc-500 hover:text-zinc-300"}`}>Problem</button>
+                <button onClick={() => setActiveTab("submissions")} className={`text-[10px] font-bold uppercase tracking-widest px-6 py-3 transition-all ${activeTab === "submissions" ? "text-white border-b-2 border-white" : "text-zinc-500 hover:text-zinc-300"}`}>Submissions</button>
               </div>
               <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
                 {activeTab === "description" ? <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap mb-10">{problem?.description}</p> : <div className="space-y-4 animate-in fade-in duration-300">{history.map((sub, i) => (<div key={i} onClick={() => handleRestoreCode(sub.code)} className="bg-[#111] border border-zinc-800 p-4 rounded-xl flex justify-between items-center hover:border-zinc-500 cursor-pointer group"><StatusBadge status={sub.status} /><span className="text-xs font-mono text-zinc-500">{new Date(sub.createdAt).toLocaleTimeString()}</span></div>))}</div>}

@@ -10,7 +10,6 @@ export const initializeSockets = (httpServer) => {
         cors: { origin: process.env.CORS_ORIGIN, credentials: true }
     });
 
-    // Authentication Middleware
     io.use((socket, next) => {
         try {
             let token = socket.handshake.auth?.token;
@@ -27,11 +26,11 @@ export const initializeSockets = (httpServer) => {
     });
 
     io.on("connection", (socket) => {
-        console.log(`🟢 Socket connected: ${socket.id}`);
-
         socket.on("join-room", async (data) => {
             const { roomCode } = data;
             socket.join(roomCode);
+            
+            // Store critical info in socket data for the disconnect event
             socket.data.roomCode = roomCode;
             
             const room = await Room.findOne({ roomCode, isActive: true });
@@ -41,14 +40,12 @@ export const initializeSockets = (httpServer) => {
             socket.data.isHost = isHost;
 
             if (isHost) {
-                // Send current board state (all problems, all students) to teacher on join/refresh
                 const allProgress = room.studentProgress.map(p => ({
                     studentId: p.studentId,
                     results: Object.fromEntries(p.results) 
                 }));
                 socket.emit("sync-entire-leaderboard", allProgress);
             } else {
-                // Notify teacher a student joined
                 socket.to(roomCode).emit("student-joined", { 
                     _id: socket.data.userId, 
                     username: socket.data.username 
@@ -70,27 +67,13 @@ export const initializeSockets = (httpServer) => {
 
                 const currentStatusInDB = progress.results.get(problemId);
 
-                // 🚨 STICKY AC LOGIC:
-                // If the user already has "AC" in the DB, we DO NOT update it.
-                // If they have anything else (WA, RE, TLE) or NOTHING, we update it to the LATEST submission.
                 if (currentStatusInDB !== "AC") {
                     progress.results.set(problemId, status);
                     room.markModified('studentProgress');
                     await room.save();
-                    
-                    // Broadcast the new status (WA, RE, TLE, or the new AC)
-                    io.to(roomCode).emit("leaderboard-update", {
-                        username,
-                        problemId,
-                        status: status 
-                    });
+                    io.to(roomCode).emit("leaderboard-update", { username, problemId, status });
                 } else {
-                    // If already AC, force broadcast AC to keep teacher UI in sync (ignores the new WA)
-                    io.to(roomCode).emit("leaderboard-update", {
-                        username,
-                        problemId,
-                        status: "AC" 
-                    });
+                    io.to(roomCode).emit("leaderboard-update", { username, problemId, status: "AC" });
                 }
             } catch (error) {
                 console.error("Submission Error:", error);
@@ -102,8 +85,13 @@ export const initializeSockets = (httpServer) => {
             await Room.updateOne({ roomCode }, { isActive: false });
         });
 
+        // 🚨 STUDENT LEAVING LOGIC
         socket.on("disconnect", () => {
-            console.log(`🔴 Disconnected: ${socket.id}`);
+            const { roomCode, userId, username, isHost } = socket.data;
+            if (roomCode && userId && !isHost) {
+                console.log(`👤 Student Left: ${username} from ${roomCode}`);
+                socket.to(roomCode).emit("student-left", { _id: userId, username });
+            }
         });
     });
 
