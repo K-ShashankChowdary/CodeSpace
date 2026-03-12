@@ -66,6 +66,9 @@ function RoomDashboard() {
   };
 
   useEffect(() => {
+    if (!socket.connected) {
+      socket.connect();
+    }
     const fetchRoomData = async () => {
       try {
         const [userRes, roomRes] = await Promise.all([

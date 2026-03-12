@@ -51,6 +51,9 @@ function IDE() {
 
   // --- EFFECT 1: DATA FETCHING & CONNECTION ---
   useEffect(() => {
+    if (!socket.connected) {
+      socket.connect();
+    }
     const fetchWorkspaceData = async () => {
       try {
         const userRes = await api.get("/users/current-user");

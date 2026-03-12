@@ -1,6 +1,5 @@
 import { io } from "socket.io-client";
 
-// Centralized socket connection utility to ensure consistent configuration across the app.
 const getSocketUrl = () => {
   const apiUrl = import.meta.env.VITE_API_URL || "https://codespace-api.duckdns.org/api/v1";
   try {
@@ -15,10 +14,10 @@ const SOCKET_URL = getSocketUrl();
 
 export const socket = io(SOCKET_URL, {
   withCredentials: true,
-  autoConnect: true,
+  autoConnect: false, // 🚨 Prevent connecting before login
+  transports: ["websocket", "polling"] // Good fallback to have
 });
 
-// Diagnostic connection logging for Vercel/Render
 socket.on("connect", () => {
   console.log(`[Socket] Connected to ${SOCKET_URL} with ID: ${socket.id}`);
 });
