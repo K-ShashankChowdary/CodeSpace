@@ -16,5 +16,19 @@ const SOCKET_URL = getSocketUrl();
 export const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: false,
-  transports: ["polling", "websocket"],
+  // Force WebSocket first, fallback to polling only if necessary
+  transports: ["websocket", "polling"],
+});
+
+// Diagnostic connection logging for Vercel/Render
+socket.on("connect", () => {
+  console.log(`[Socket] Connected to ${SOCKET_URL} with ID: ${socket.id} via ${socket.io.engine.transport.name}`);
+});
+
+socket.on("connect_error", (err) => {
+  console.error(`[Socket] Connection Error:`, err.message);
+});
+
+socket.io.engine.on("upgrade", () => {
+  console.log(`[Socket] Transport upgraded to: ${socket.io.engine.transport.name}`);
 });
