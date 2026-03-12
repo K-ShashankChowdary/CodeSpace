@@ -105,5 +105,23 @@ const closeRoom = asyncHandler(async (req, res) => {
         new ApiResponse(200, null, "Room closed successfully")
     );
 });
+const leaveRoom = asyncHandler(async (req, res) => {
+    const { roomCode } = req.params;
+    const room = await Room.findOne({ roomCode: roomCode.toUpperCase(), isActive: true });
 
-export { createRoom, joinRoom, getRoomDetails, closeRoom };
+    if (!room) {
+        throw new ApiError(404, "Room not found or already closed");
+    }
+
+    // Remove the user from the participants array
+    room.participants = room.participants.filter(
+        (userId) => !userId.equals(req.user._id)
+    );
+    await room.save({ validateBeforeSave: false });
+
+    return res.status(200).json(
+        new ApiResponse(200, null, "Successfully left the room")
+    );
+});
+
+export { createRoom, joinRoom, getRoomDetails, closeRoom, leaveRoom };
