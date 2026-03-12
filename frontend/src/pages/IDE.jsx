@@ -6,6 +6,7 @@ import CodeEditor from "../components/CodeEditor";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
+import { LogOut } from "lucide-react";
 
 
 // Fallback to exactly the URL the user deployed with, or dynamic if env is properly configured.
@@ -401,15 +402,32 @@ function IDE() {
             </div>
           </div>
         )}
-        <header className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-blue-400">Teacher Dashboard: {problem?.title}</h1>
-            <p className="text-zinc-500 font-mono mt-1 flex items-center gap-2">
-              Room Code: <span className="text-white font-bold bg-zinc-800 px-3 py-1 rounded-md">{roomCode}</span>
-            </p>
+        <header className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-6">
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={() => navigate(`/room/${roomCode}`)} 
+              className="flex items-center gap-2 group text-zinc-500 hover:text-white transition-colors"
+            >
+              <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 group-hover:border-blue-500/50 group-hover:shadow-[0_0_15px_rgba(37,99,235,0.2)] transition-all">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                </svg>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-widest">Return to Classroom</span>
+            </button>
+            <div className="h-6 w-px bg-zinc-800"></div>
+            <div>
+              <h1 className="text-xl font-bold flex items-center gap-3">
+                <span className="text-blue-400">Live Leaderboard:</span>
+                <span className="text-white">{problem?.title}</span>
+              </h1>
+              <p className="text-zinc-500 font-mono text-xs mt-1 flex items-center gap-2">
+                Room Code: <span className="text-white font-bold bg-zinc-800 px-2 py-0.5 rounded-md">{roomCode}</span>
+              </p>
+            </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={handleCloseRoom}>
-            Exit Classroom
+          <Button variant="ghost" size="sm" onClick={handleCloseRoom} className="text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+            End Classroom for All
           </Button>
         </header>
 
@@ -512,16 +530,24 @@ function IDE() {
             <span className="text-[10px] font-bold uppercase tracking-widest">{roomCode ? "Return to Room" : "Dashboard"}</span>
           </button>
           <div className="h-4 w-px bg-zinc-800"></div>
-          <div className="flex items-center gap-3">
-            <img src="/fevicon.svg" alt="CodeSpace" className="w-6 h-6 opacity-80" />
-            <h1 className="text-sm font-bold text-zinc-100 flex items-center gap-4">
+          <div className="flex flex-col justify-center">
+            <h1 className="text-sm font-black text-white tracking-tight flex items-center gap-3">
               {problem?.title || "Problem"}
+            </h1>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md border ${
+                 problem?.difficulty === "Easy" ? "text-green-400 border-green-500/20 bg-green-500/10" : 
+                 problem?.difficulty === "Medium" ? "text-yellow-400 border-yellow-500/20 bg-yellow-500/10" : 
+                 "text-red-400 border-red-500/20 bg-red-500/10"
+               }`}>
+                {problem?.difficulty || "Standard"}
+              </span>
               {roomCode && (
-                <span className="bg-blue-500/10 text-blue-400 text-[9px] px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-widest font-mono">
-                  Room: {roomCode}
+                <span className="bg-blue-500/10 text-blue-400 text-[8px] px-1.5 py-0.5 rounded-md border border-blue-500/20 uppercase tracking-widest font-black">
+                  Session: {roomCode}
                 </span>
               )}
-            </h1>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-6">
@@ -551,8 +577,14 @@ function IDE() {
               Exit Classroom
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={handleLogout} className="text-zinc-400 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 transition-colors">
-            Logout
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handleLogout} 
+            className="bg-red-500/5 hover:bg-red-500/20 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500/50 transition-all duration-300 group/logout gap-2 flex items-center px-4 rounded-xl backdrop-blur-md h-10 shadow-[0_8px_32px_rgba(239,68,68,0.1)]"
+          >
+            <LogOut className="w-3.5 h-3.5 group-hover/logout:-translate-x-0.5 transition-transform" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>
           </Button>
         </div>
       </header>
@@ -644,22 +676,16 @@ function IDE() {
               {renderConsoleContent()}
             </div>
           </div>
+          <div className="h-16 flex justify-end items-center px-2 gap-3 shrink-0">
+            <Button variant="secondary" size="lg" onClick={() => handleExecution("run")} disabled={isRunning || isSubmitting}>
+              {isRunning ? "Running..." : "Run"}
+            </Button>
+            <Button variant="success" size="lg" onClick={() => handleExecution("submit")} disabled={isRunning || isSubmitting}>
+              {isSubmitting ? "Submitting..." : "Submit"}
+            </Button>
+          </div>
         </div>
       </div>
-
-      <footer className="h-14 bg-[#0d0d0d] border-t border-zinc-800 px-6 flex justify-between items-center shrink-0 z-30">
-        <button className="text-[10px] font-bold text-zinc-600 hover:text-white uppercase tracking-widest transition-colors">Output ▴</button>
-        <div className="flex items-center gap-3">
-          {/* run = visible test cases only */}
-          <Button variant="secondary" onClick={() => handleExecution("run")} disabled={isRunning || isSubmitting}>
-            {isRunning ? "Running..." : "Run"}
-          </Button>
-          {/* submit = all test cases including hidden */}
-          <Button variant="success" onClick={() => handleExecution("submit")} disabled={isRunning || isSubmitting}>
-            {isSubmitting ? "Submitting..." : "Submit"}
-          </Button>
-        </div>
-      </footer>
     </div>
   );
 }

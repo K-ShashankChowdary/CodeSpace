@@ -10,6 +10,23 @@ import React from "react";
 import Editor from "@monaco-editor/react";
 
 const CodeEditor = ({ code, setCode, language = "cpp" }) => {
+  // Define custom high-fidelity black theme
+  const handleEditorWillMount = (monaco) => {
+    monaco.editor.defineTheme('codespace-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': '#050505',
+        'editor.lineHighlightBackground': '#141414',
+        'editorLineNumber.foreground': '#3f3f46',
+        'editorLineNumber.activeForeground': '#a1a1aa',
+        'editor.selectionBackground': '#2563eb33',
+        'editor.inactiveSelectionBackground': '#2563eb11',
+      }
+    });
+  };
+
   // Editor settings configured to feel premium and VS Code-like
   const editorOptions = {
     fontSize: 16,
@@ -23,6 +40,7 @@ const CodeEditor = ({ code, setCode, language = "cpp" }) => {
     formatOnPaste: true,                   // auto-format pasted code
     lineHeight: 24,
     bracketPairColorization: { enabled: true }, // colorize matching brackets
+    smoothScrolling: true,
   };
 
   // Updates parent's code state on every keystroke
@@ -31,15 +49,16 @@ const CodeEditor = ({ code, setCode, language = "cpp" }) => {
   };
 
   return (
-    <div className="h-full w-full border border-[#3e3e3e] rounded-lg overflow-hidden shadow-2xl">
+    <div className="h-full w-full overflow-hidden">
       <Editor
         height="100%"
-        theme="vs-dark"
+        theme="codespace-dark"
+        beforeMount={handleEditorWillMount}
         defaultLanguage={language}
         defaultValue={code}
         onChange={handleEditorChange}
         options={editorOptions}
-        loading={<div className="text-gray-400 p-4">Initializing Editor...</div>}
+        loading={<div className="text-zinc-500 p-8 font-black uppercase text-[10px] tracking-widest animate-pulse">Initializing Editor...</div>}
       />
     </div>
   );

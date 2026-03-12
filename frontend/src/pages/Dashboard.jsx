@@ -4,6 +4,8 @@ import api from "../services/api";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import Input from "../components/ui/Input";
+import Toast from "../components/ui/Toast";
+import { Search, Plus, Play, Info as InfoIcon, LogOut, LayoutGrid, Users, X, CheckCircle2 } from "lucide-react";
 
 function Dashboard() {
   const [problems, setProblems] = useState([]);
@@ -17,6 +19,13 @@ function Dashboard() {
   const [modalSearch, setModalSearch] = useState("");
   const [selectedProblems, setSelectedProblems] = useState([]);
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  
+  // Toast Notification State
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = "info") => {
+    setToast({ message, type });
+  };
 
   const navigate = useNavigate();
 
@@ -44,7 +53,7 @@ function Dashboard() {
       navigate(`/room/${roomCode}`);
     } catch (error) {
       console.error("Room creation failed:", error);
-      alert(error.response?.data?.message || "Failed to create room");
+      showToast(error.response?.data?.message || "Failed to create room", "error");
     } finally {
       setIsCreatingRoom(false);
     }
@@ -59,7 +68,7 @@ function Dashboard() {
       navigate(`/room/${roomCode}`);
     } catch (error) {
       console.error("Failed to join room", error);
-      alert(error.response?.data?.message || "Invalid or expired room code");
+      showToast(error.response?.data?.message || "Invalid or expired room code", "error");
     }
   };
 
@@ -69,7 +78,7 @@ function Dashboard() {
       window.location.href = "/auth";
     } catch (error) {
       console.error("Logout failed:", error);
-      alert("Failed to logout. Please try again.");
+      showToast("Failed to logout. Please try again.", "error");
     }
   };
 
@@ -102,68 +111,74 @@ function Dashboard() {
       
       {/* Sidebar Navigation */}
       <aside className="w-64 bg-[#0a0a0a] border-r border-zinc-800/50 flex flex-col shrink-0 z-20">
-        <div className="p-6 border-b border-zinc-800/50">
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-3">
-            <img src="/fevicon.svg" alt="CodeSpace" className="w-8 h-8 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.3)]" />
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400">CodeSpace</span>
+        <div className="p-8 border-b border-zinc-800/40">
+          <h1 className="text-xl font-black text-white tracking-tighter flex items-center gap-3 active:scale-95 transition-transform" onClick={() => navigate("/")}>
+            <div className="relative group">
+              <div className="absolute inset-0 bg-blue-500 blur-md opacity-20 group-hover:opacity-40 transition-opacity" />
+              <img src="/fevicon.svg" alt="CodeSpace" className="w-9 h-9 relative z-10" />
+            </div>
+            <span className="text-gradient">CodeSpace</span>
           </h1>
         </div>
         
-        <div className="p-4 flex-1 flex flex-col gap-6">
-          <div className="space-y-1">
-            <span className="px-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 block">Menu</span>
-            <div className="w-full px-3 py-2 rounded-lg bg-zinc-900/50 
-            text-blue-400 font-medium text-sm border border-blue-500/20 shadow-[0_0_10px_rgba(37,99,235,0.1)]">
-              Dashboard
+        <div className="p-5 flex-1 flex flex-col gap-8">
+          <div className="space-y-1.5">
+            <div className="w-full px-4 py-2.5 rounded-xl bg-blue-500/10 
+            text-blue-400 font-bold text-sm border border-blue-500/20 inner-glow">
+              Problem Set
             </div>
-            <button onClick={() => setIsModalOpen(true)} className="w-full text-left px-3 py-2 rounded-lg text-zinc-400 font-medium text-sm hover:bg-zinc-900 transition-colors group flex justify-between items-center">
+            <button onClick={() => setIsModalOpen(true)} className="w-full text-left px-4 py-2.5 rounded-xl text-zinc-500 font-bold text-sm hover:bg-zinc-900 transition-all group flex justify-between items-center">
               Host Classroom
-              <span className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-500">→</span>
+              <span className="opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-blue-500 font-black">›</span>
             </button>
           </div>
 
-          <div className="space-y-3">
-            <span className="px-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 block">Student Access</span>
-            <form onSubmit={handleJoinRoom} className="px-1 flex flex-col gap-2">
+          <div className="space-y-4">
+            <form onSubmit={handleJoinRoom} className="px-1 flex flex-col gap-3">
               <Input
                 name="roomCode"
-                placeholder="Enter Room Code"
+                placeholder="Classroom Code"
                 value={roomCodeInput}
                 onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
                 maxLength={6}
-                className="w-full font-mono uppercase bg-[#050505] border-zinc-800 text-sm"
+                className="w-full font-mono uppercase bg-zinc-900/30 border-zinc-800/40 text-xs"
               />
-              <Button type="submit" variant="primary" disabled={!roomCodeInput.trim()} className="w-full text-sm">
+              <Button type="submit" variant="primary" disabled={!roomCodeInput.trim()} className="w-full text-[10px]">
                 Join Classroom
               </Button>
             </form>
           </div>
         </div>
         
-        <div className="p-4 border-t border-zinc-800/50">
-          <Button variant="ghost" onClick={handleLogout} className="w-full text-zinc-400 hover:text-red-400 hover:bg-red-500/10 justify-start">
-            <span className="text-sm font-medium">Logout</span>
+        <div className="p-6 border-t border-zinc-800/40">
+          <Button 
+            variant="ghost" 
+            onClick={handleLogout} 
+            className="w-full bg-red-500/5 hover:bg-red-500/20 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500/50 justify-start group/logout px-4 py-3 rounded-xl transition-all duration-300 backdrop-blur-md flex items-center gap-3 shadow-[0_8px_32px_rgba(239,68,68,0.1)]"
+          >
+            <LogOut className="w-4 h-4 group-hover/logout:-translate-x-1 transition-transform" />
+            <span className="text-xs font-black uppercase tracking-widest">Logout</span>
           </Button>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-[#020202] relative shadow-[inset_1px_0_0_0_rgba(255,255,255,0.05)]">
-        <header className="h-20 px-10 flex items-center justify-between border-b border-zinc-800/50 bg-[#0a0a0a]/50 backdrop-blur-md sticky top-0 z-10 shrink-0">
+      <main className="flex-1 flex flex-col overflow-hidden bg-[#020202] relative shadow-[inset_1px_0_0_0_rgba(255,255,255,0.03)]">
+        <header className="h-24 px-12 flex items-center justify-between border-b border-zinc-800/30 bg-[#0a0a0a]/40 backdrop-blur-2xl sticky top-0 z-10 shrink-0">
           <div>
-            <h2 className="text-2xl font-black text-white tracking-tighter">Problem Set</h2>
+            <h2 className="text-3xl font-black text-white tracking-tighter italic">Problem Set</h2>
           </div>
-          <div className="w-64">
+          <div className="w-72">
              <Input 
-                placeholder="Search problems..." 
+                placeholder="Search problems" 
                 value={searchFilter} 
                 onChange={(e) => setSearchFilter(e.target.value)} 
-                className="w-full bg-[#0d0d0d] border-zinc-800 text-sm"
+                className="w-full bg-zinc-900/20 border-zinc-800/40 text-xs"
               />
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-10">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-12">
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-8 text-sm">
               {error}
@@ -247,62 +262,83 @@ function Dashboard() {
 
       {/* Host Room Modal (Preserved & Polished) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#0a0a0a] border border-zinc-800 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-zinc-800/60 flex justify-between items-center bg-[#050505]">
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-2xl flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300">
+          <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] w-full max-w-4xl h-[85vh] flex flex-col shadow-[0_0_100px_rgba(0,0,0,0.8)] overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-8 duration-500">
+            {/* Modal Header */}
+            <div className="px-10 py-8 border-b border-white/5 flex justify-between items-center bg-linear-to-b from-white/[0.02] to-transparent">
               <div>
-                <h2 className="text-xl font-bold text-white tracking-tight">Host a Classroom</h2>
-                <p className="text-xs text-zinc-500 mt-1 uppercase tracking-widest font-bold">Select problems to assign</p>
+                <h2 className="text-2xl font-black text-white tracking-tighter flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                    <Users className="w-5 h-5 text-blue-400" />
+                  </div>
+                  Host Session
+                </h2>
+                <p className="text-[10px] text-zinc-500 mt-2 uppercase tracking-[0.2em] font-black flex items-center gap-2">
+                  <span className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
+                  Select problems to assign
+                </p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-zinc-500 hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-800 transition-colors">✕</button>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="text-zinc-500 hover:text-white w-12 h-12 flex items-center justify-center rounded-2xl hover:bg-white/5 transition-all active:scale-90"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
             
-            <div className="p-5 border-b border-zinc-800/60 bg-[#0a0a0a]">
-               <Input 
-                 placeholder="Search problems by title..." 
-                 value={modalSearch} 
-                 onChange={(e) => setModalSearch(e.target.value)} 
-                 className="w-full bg-[#050505] border-zinc-800 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 text-sm"
-               />
+            {/* Search Area */}
+            <div className="px-10 py-6 border-b border-white/5 bg-white/[0.01]">
+              <div className="relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600 group-focus-within:text-blue-500 transition-colors" />
+                <Input 
+                  placeholder="Filter by title..." 
+                  value={modalSearch} 
+                  onChange={(e) => setModalSearch(e.target.value)} 
+                  className="pl-11 py-5 bg-zinc-900/10 border-white/5 focus:border-blue-500/30 text-xs rounded-2xl"
+                />
+              </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-0 custom-scrollbar bg-[#050505] border-b border-zinc-800/60">
+            {/* Problem Selection Grid */}
+            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[#050505]">
                {modalFilteredProblems.length === 0 ? (
-                 <p className="text-center py-12 text-sm text-zinc-600 font-bold uppercase tracking-widest">No problems match your search</p>
+                 <div className="h-full flex flex-col items-center justify-center text-center opacity-30 italic">
+                    <Search className="w-10 h-10 mb-4" />
+                    <p className="text-sm font-bold uppercase tracking-widest ">No problems found</p>
+                 </div>
                ) : (
-                 <div className="divide-y divide-zinc-800/50">
+                 <div className="flex flex-col gap-2">
                    {modalFilteredProblems.map(p => (
                      <div 
                        key={p._id} 
                        onClick={() => toggleProblemSelection(p._id)} 
-                       className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition-all duration-200 group ${
-                         selectedProblems.includes(p._id) 
-                           ? 'bg-blue-500/5' 
-                           : 'hover:bg-zinc-900/50'
+                       className={`p-4 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden flex items-center justify-between border group
+                       ${selectedProblems.includes(p._id) 
+                           ? 'bg-blue-500/10 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.1)]' 
+                           : 'bg-[#0a0a0a] border-white/5 hover:border-white/10 hover:bg-white/[0.02]'
                        }`}
                      >
-                       <div className={`shrink-0 w-5 h-5 rounded border flex items-center justify-center transition-all ${
-                         selectedProblems.includes(p._id) 
-                           ? 'bg-blue-600 border-blue-500 text-white' 
-                           : 'border-zinc-700 bg-zinc-900/50 text-transparent group-hover:border-zinc-500'
-                       }`}>
-                         <svg className={`w-3.5 h-3.5 transition-transform ${selectedProblems.includes(p._id) ? "scale-100" : "scale-0"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7" />
-                         </svg>
-                       </div>
-                       
-                       <div className="flex-1 min-w-0">
-                         <div className="flex items-center justify-between gap-4">
-                           <h3 className={`text-sm font-medium truncate ${selectedProblems.includes(p._id) ? "text-blue-400" : "text-zinc-200"}`}>
+                       <div className="flex items-center gap-4 flex-1 min-w-0">
+                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-colors ${
+                            selectedProblems.includes(p._id) ? "bg-blue-500 border-blue-400" : "bg-zinc-900 border-zinc-800"
+                         }`}>
+                           {selectedProblems.includes(p._id) ? (
+                             <CheckCircle2 className="w-5 h-5 text-white" />
+                           ) : null}
+                         </div>
+                         <div className="min-w-0">
+                           <h3 className={`text-sm font-black tracking-tight truncate ${selectedProblems.includes(p._id) ? "text-blue-400" : "text-zinc-200"}`}>
                              {p.title}
                            </h3>
-                           <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border shrink-0 ${
-                             p.difficulty === "Easy" ? "text-green-400 border-green-500/20 bg-green-500/10" : 
-                             p.difficulty === "Medium" ? "text-yellow-400 border-yellow-500/20 bg-yellow-500/10" : 
-                             "text-red-400 border-red-500/20 bg-red-500/10"
-                           }`}>
-                             {p.difficulty || "Standard"}
-                           </span>
+                           <div className="flex items-center gap-2 mt-0.5">
+                             <span className={`text-[7px] font-black uppercase tracking-widest ${
+                               p.difficulty === "Easy" ? "text-green-500" : 
+                               p.difficulty === "Medium" ? "text-yellow-500" : 
+                               "text-red-500"
+                             }`}>
+                               {p.difficulty || "Standard"}
+                             </span>
+                           </div>
                          </div>
                        </div>
                      </div>
@@ -311,17 +347,36 @@ function Dashboard() {
                )}
             </div> 
             
-            <div className="p-5 border-t border-zinc-800/60 bg-[#050505] flex justify-between items-center">
-               <div className="flex items-center gap-3 bg-zinc-900/50 border border-zinc-800/60 px-4 py-2 rounded-lg">
-                 <span className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Selected</span>
-                 <span className="text-blue-400 text-sm font-bold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                   {selectedProblems.length}
-                 </span>
-               </div>
-               <div className="flex gap-3">
-                 <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                 <Button variant="primary" onClick={handleCreateRoom} disabled={selectedProblems.length === 0 || isCreatingRoom} className="shadow-[0_0_15px_rgba(37,99,235,0.3)]">
-                   {isCreatingRoom ? <Spinner size="sm" /> : "Start Classroom"}
+            {/* Modal Footer */}
+            <div className="px-10 py-8 border-t border-white/5 bg-linear-to-t from-white/[0.02] to-transparent flex justify-between items-center">
+                <div className="flex items-center gap-6">
+                   <div className="flex flex-col">
+                      <div className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Selection</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {selectedProblems.length > 0 ? (
+                          <span className="text-xl font-black text-blue-400 animate-in slide-in-from-bottom-2 duration-300">
+                            {selectedProblems.length} <span className="text-xs uppercase tracking-widest text-zinc-400 ml-1">Problems Selected</span>
+                          </span>
+                        ) : (
+                          <span className="text-sm font-bold text-zinc-700 italic">No selection</span>
+                        )}
+                      </div>
+                   </div>
+                </div>
+               <div className="flex gap-4">
+                 <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Maybe Later</Button>
+                 <Button 
+                   variant="primary" 
+                   onClick={handleCreateRoom} 
+                   disabled={selectedProblems.length === 0 || isCreatingRoom}
+                   className="h-14 px-10 rounded-2xl shadow-[0_20px_40px_rgba(59,130,246,0.2)]"
+                 >
+                   {isCreatingRoom ? <Spinner size="sm" /> : (
+                     <span className="flex items-center gap-3">
+                       <Play className="w-5 h-5 fill-current" />
+                       Start Classroom
+                     </span>
+                   )}
                  </Button>
                </div>
             </div>
@@ -329,6 +384,13 @@ function Dashboard() {
         </div>
       )}
 
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
     </div>
   );
 }

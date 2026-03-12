@@ -1,44 +1,55 @@
 @import "tailwindcss";
 
-/* Global Dark Mode Reset */
+/* Global Dark Mode Reset - Premium Zinc Palette */
 body {
-  @apply bg-[#0f0f0f] text-gray-200 antialiased;
+  @apply bg-[#050505] text-zinc-300 antialiased selection:bg-blue-500/30 selection:text-blue-200;
   margin: 0;
-  font-family: "Inter", sans-serif; /* Optional: cleaner font */
-  overflow: hidden; /* Prevents scrolling on the main editor page */
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  letter-spacing: -0.01em;
 }
 
-/* Custom Scrollbar for the problem description */
+/* Base Headings - Tighter Tracking for Premium Feel */
+h1, h2, h3, h4 {
+  @apply tracking-tight text-white;
+}
+
+/* Custom Thin Professional Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
+  width: 5px;
+  height: 5px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  @apply bg-transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #444;
+  @apply bg-zinc-800 rounded-full border-2 border-transparent bg-clip-padding hover:bg-zinc-700 transition-colors;
 }
 
+/* Firefox fallback */
 .custom-scrollbar {
-  /* Firefox fallback */
   scrollbar-width: thin;
-  scrollbar-color: #333 #1a1a1a; 
+  scrollbar-color: theme('colors.zinc.800') transparent;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
+/* Premium Utilities */
+.glass-panel {
+  @apply bg-[#0a0a0a]/60 backdrop-blur-xl border border-white/5;
 }
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #1a1a1a;
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-linear-to-b from-white to-zinc-500;
 }
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 4px;
+
+.glow-blue {
+  @apply shadow-[0_0_20px_rgba(59,130,246,0.15)];
 }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #444;
+
+.inner-glow {
+  @apply shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.05)];
+}
+
+/* Smooth Transitions */
+* {
+  @apply transition-all duration-300 ease-out;
 }

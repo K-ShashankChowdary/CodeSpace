@@ -29,9 +29,9 @@ const Input = ({
         value={value}
         onChange={onChange}
         required={required}
-        className={`bg-[#0a0a0a] border border-[#2a2a2a] p-3 rounded-lg text-sm text-white 
-          placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 
-          focus:ring-blue-500 transition-all ${className}`}
+        className={`bg-[#0d0d0d] border border-zinc-800/60 px-4 py-3 rounded-xl text-sm text-white 
+          placeholder-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 
+          focus:ring-blue-500/20 inner-glow transition-all duration-300 ${className}`}
         {...props}
       />
     </div>
