@@ -49,7 +49,7 @@ function IDE() {
     setToast({ message, type });
   };
 
-  // --- EFFECT 1: DATA FETCHING & CONNECTION ---
+  // --- EFFECT 1: DATA FETCHING & HYDRATION ---
   useEffect(() => {
     if (!socket.connected) {
       socket.connect();
@@ -68,12 +68,24 @@ function IDE() {
           const roomData = roomRes.data.data;
           setRoom(roomData);
 
-          //Convert both IDs to strings before comparing to prevent UI swapping
           const hostId = roomData.host._id.toString();
           const currentUserId = user._id.toString();
           const userIsHost = (hostId === currentUserId);
           
           setIsHost(userIsHost);
+
+          // 🚨 HYDRATION LOGIC: Restore permanent statuses from DB upon entry/refresh
+          const initialStatuses = {};
+          if (roomData.studentProgress && Array.isArray(roomData.studentProgress)) {
+            roomData.studentProgress.forEach((progress) => {
+              const student = roomData.participants.find(p => p._id === progress.studentId);
+              const statusForThisProblem = progress.results[id]; // 'id' is current problemId
+              if (student && statusForThisProblem) {
+                initialStatuses[student.username] = statusForThisProblem;
+              }
+            });
+          }
+          setLiveStatuses(initialStatuses);
 
           const emitJoinRoom = () => {
             socket.emit("join-room", {
@@ -85,7 +97,6 @@ function IDE() {
           };
 
           socket.on("connect", emitJoinRoom);
-          
           if (socket.connected) emitJoinRoom();
         }
       } catch (error) {
@@ -108,18 +119,21 @@ function IDE() {
     };
   }, [id, roomCode, navigate]);
 
-  // --- EFFECT 2: TEACHER-ONLY NOTIFICATIONS (TOASTS) ---
+  // --- EFFECT 2: TEACHER-ONLY LISTENERS ---
   useEffect(() => {
-    // 🚨 Exit if not in a room, or if the user is a student. 
-    // This ensures ONLY the teacher sees the toasts.
     if (!roomCode || !isHost) return;
 
     const handleStudentJoined = (student) => {
-      showToast(`Student joined: ${student.username}`, "info");
       setRoom((prev) => {
         if (!prev) return prev;
-        if (prev.participants.some(p => p._id === student._id)) return prev;
-        return { ...prev, participants: [...prev.participants, student] };
+        
+        // 🚨 TOAST FILTER: Only show notification if student is actually new to local state
+        const isAlreadyInRoom = prev.participants.some(p => p._id === student._id);
+        if (!isAlreadyInRoom) {
+          showToast(`Student joined: ${student.username}`, "info");
+          return { ...prev, participants: [...prev.participants, student] };
+        }
+        return prev;
       });
     };
 
@@ -132,21 +146,22 @@ function IDE() {
     };
 
     const handleLeaderboardUpdate = (data) => {
-      console.log("[IDE Socket] Received leaderboard update:", data);
       if (data.problemId === id) {
-        setLiveStatuses((prev) => ({ ...prev, [data.username]: data.status }));
-      } else {
-        console.warn("[IDE Socket] Ignored update for different problemId:", data.problemId, "Current:", id);
+        setLiveStatuses((prev) => {
+          // 🚨 AC-LOCK (Frontend): If status is already Accepted, don't downgrade it
+          const existingStatus = prev[data.username];
+          if (existingStatus === "AC" || existingStatus === "Accepted") {
+            return prev;
+          }
+          return { ...prev, [data.username]: data.status };
+        });
       }
     };
 
-    // Attach listeners (Only happens if isHost is true)
-    console.log("[IDE Socket] Attaching teacher listeners for room:", roomCode);
     socket.on("student-joined", handleStudentJoined);
     socket.on("student-left", handleStudentLeft);
     socket.on("leaderboard-update", handleLeaderboardUpdate);
 
-    // Clean up specific handlers
     return () => {
       socket.off("student-joined", handleStudentJoined);
       socket.off("student-left", handleStudentLeft);
@@ -169,7 +184,6 @@ function IDE() {
     return () => socket.off("room-closed", handleRoomClosed);
   }, [isHost, roomCode, navigate]);
 
-  // Sync ref for polling and auto-fetch history
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   useEffect(() => { if (activeTab === "submissions") fetchHistory(); }, [activeTab]);
 
@@ -182,12 +196,8 @@ function IDE() {
 
   const handleLogout = async () => {
     try {
-      if (socket.connected) {
-        socket.disconnect();
-      }
-      // 🚨 CRITICAL: Clear the token so the socket doesn't auto-connect on the login page
+      if (socket.connected) socket.disconnect();
       localStorage.removeItem("accessToken");
-      
       await api.post("/users/logout");
       window.location.href = "/auth";
     } catch (error) {
@@ -383,7 +393,7 @@ function IDE() {
   if (isFetchingProblem)
     return (
       <div className="h-screen w-screen bg-[#0a0a0a] flex flex-col items-center justify-center">
-        <Spinner size="sm" label="Loading Workspace" />
+        <Spinner size="sm" label="Syncing Leaderboard..." />
       </div>
     );
 
@@ -449,7 +459,6 @@ function IDE() {
                   statusState === "error" ? "border-red-500/30 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]" :
                   "border-zinc-800/80 hover:border-blue-500/30"
                 }`}>
-                  {/* Background glow based on status */}
                   <div className={`absolute -top-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-20 pointer-events-none transition-colors duration-1000 ${
                     statusState === "success" ? "bg-green-500" :
                     statusState === "error" ? "bg-red-500" :

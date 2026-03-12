@@ -8,11 +8,11 @@ const roomSchema = new Schema(
             unique: true,
             uppercase: true,
             trim: true,
-            index: true         // indexed for fast lookups when students join
+            index: true
         },
         host: {
             type: Schema.Types.ObjectId,
-            ref: "User",        // the teacher who created this room
+            ref: "User",
             required: true
         },
         problems: [
@@ -24,12 +24,20 @@ const roomSchema = new Schema(
         participants: [
             {
                 type: Schema.Types.ObjectId,
-                ref: "User"     // all users in the room (host + students)
+                ref: "User"
+            }
+        ],
+        // 🚨 NEW: Stores persistent progress for the leaderboard
+        studentProgress: [
+            {
+                studentId: { type: Schema.Types.ObjectId, ref: "User" },
+                // Map of ProblemId -> Status (e.g., "AC", "WA")
+                results: { type: Map, of: String, default: {} }
             }
         ],
         isActive: {
             type: Boolean,
-            default: true       // set to false when the teacher closes the room
+            default: true
         }
     },
     { timestamps: true }
