@@ -1,34 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { io } from "socket.io-client";
 import api from "../services/api";
 import CodeEditor from "../components/CodeEditor";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
 import { LogOut } from "lucide-react";
+import Toast from "../components/ui/Toast";
 
 
-// Fallback to exactly the URL the user deployed with, or dynamic if env is properly configured.
-// Assuming VITE_API_URL is typically 'https://api.yourdomain.com/api/v1', we extract the base origin.
-const getSocketUrl = () => {
-  const apiUrl = import.meta.env.VITE_API_URL || "https://codespace-api.duckdns.org/api/v1";
-  try {
-    const url = new URL(apiUrl);
-    return `${url.protocol}//${url.host}`;
-  } catch (e) {
-    return "https://codespace-api.duckdns.org";
-  }
-};
+import { socket } from "../utils/socket";
 
-const SOCKET_URL = getSocketUrl(); 
-
-const socket = io(SOCKET_URL, {
-  withCredentials: true,
-  autoConnect: false,
-  //force websocket
-  transports: ["polling","websocket"], 
-});
 
 function IDE() {
   const { id } = useParams();
@@ -63,9 +45,8 @@ function IDE() {
   const [toast, setToast] = useState(null); 
   const pollingIntervalRef = useRef(null);
 
-  const showToast = (message, type = "info", duration = 3000) => {
+  const showToast = (message, type = "info") => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), duration);
   };
 
   // --- EFFECT 1: DATA FETCHING & CONNECTION ---
@@ -117,6 +98,10 @@ function IDE() {
 
     return () => {
       socket.off("connect"); 
+      socket.off("student-joined");
+      socket.off("student-left");
+      socket.off("leaderboard-update");
+      socket.off("room-closed");
       if (roomCode) socket.disconnect();
       if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
     };
@@ -392,16 +377,13 @@ function IDE() {
   if (isHost) {
     return (
       <div className="min-h-screen bg-[#050505] text-white p-8 font-sans relative">
-        {toast && (
-          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
-            <div className={`px-6 py-3 rounded-xl shadow-2xl border text-sm font-bold tracking-wide flex items-center gap-3 ${
-              toast.type === "error" ? "bg-red-500/20 border-red-500/30 text-red-200" : "bg-blue-500/20 border-blue-500/30 text-blue-200"
-            }`}>
-              <div className={`w-2 h-2 rounded-full ${toast.type === "error" ? "bg-red-500" : "bg-blue-500"} animate-pulse`}></div>
-              {toast.message}
-            </div>
-          </div>
-        )}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
         <header className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-6">
           <div className="flex items-center gap-6">
             <button 
@@ -504,14 +486,11 @@ function IDE() {
   return (
     <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
       {toast && (
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
-          <div className={`px-6 py-3 rounded-xl shadow-2xl border text-sm font-bold tracking-wide flex items-center gap-3 ${
-            toast.type === "error" ? "bg-red-500/20 border-red-500/30 text-red-200" : "bg-blue-500/20 border-blue-500/30 text-blue-200"
-          }`}>
-            <div className={`w-2 h-2 rounded-full ${toast.type === "error" ? "bg-red-500" : "bg-blue-500"} animate-pulse`}></div>
-            {toast.message}
-          </div>
-        </div>
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
       <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
         <div className="flex items-center gap-6">

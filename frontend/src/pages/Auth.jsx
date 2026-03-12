@@ -1,13 +1,14 @@
-import React, { useState } from "react";
-import api from "../services/api";
-import Button from "../components/ui/Button";
-import Input from "../components/ui/Input";
+import Toast from "../components/ui/Toast";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({ username: "", email: "", password: "" });
-  const [error, setError] = useState("");
+  const [toast, setToast] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const showToast = (message, type = "info") => {
+    setToast({ message, type });
+  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -15,7 +16,7 @@ const Auth = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    setToast(null);
     setIsLoading(true);
 
     try {
@@ -27,20 +28,24 @@ const Auth = () => {
       await api.post(endpoint, payload);
 
       if (isLogin) {
-        window.location.href = "/"; // hard reload to trigger fresh auth check in App.jsx
+        showToast("Logged in successfully!", "success");
+        setTimeout(() => {
+          window.location.href = "/"; // hard reload to trigger fresh auth check in App.jsx
+        }, 1000);
       } else {
+        showToast("Account created! Please log in.", "success");
         setIsLogin(true);
         setFormData({ username: "", email: "", password: "" });
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Authentication failed");
+      showToast(err.response?.data?.message || "Authentication failed", "error");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#0a0a0a] flex items-center justify-center text-gray-200 font-sans p-4">
+    <div className="min-h-screen w-full bg-[#0a0a0a] flex items-center justify-center text-gray-200 font-sans p-4 relative">
       <div className="bg-[#121212] p-8 rounded-xl border border-[#2a2a2a] w-full max-w-md shadow-2xl transition-all duration-300">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-extrabold text-white tracking-tight mb-2">CodeSpace</h1>
@@ -48,12 +53,6 @@ const Auth = () => {
             {isLogin ? "Welcome back. Log in to continue." : "Create your account to get started."}
           </h2>
         </div>
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-lg mb-6 text-sm font-medium text-center">
-            {error}
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           {!isLogin && (
@@ -107,6 +106,14 @@ const Auth = () => {
           </button>
         </div>
       </div>
+
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
     </div>
   );
 };

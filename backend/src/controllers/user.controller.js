@@ -30,6 +30,19 @@ const generateAccessAndRefreshTokens = async (userId) => {
 const registerUser = asyncHandler(async (req, res) => {
   const { username, email, password } = req.body;
 
+  // Assuming problemId, code, and language are also part of req.body for some reason,
+  // or this code snippet was intended for a different controller/function.
+  // Adding them as per instruction, but they are not typically part of user registration.
+  const { problemId, code, language } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(problemId)) {
+      throw new ApiError(400, "Invalid problem ID format");
+  }
+
+  if ([problemId, code, language].some((field) => !field || field.trim() === "")) {
+      throw new ApiError(400, "All fields are required");
+  }
+
   if ([username, email, password].some((f) => !f || f.trim() === "")) {
     throw new ApiError(400, "All fields are required");
   }
@@ -61,7 +74,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
   const user = await User.findOne({ $or: searchConditions });
   
-  if (!user) throw new ApiError(404, "User does not exist");
+  if (!user) throw new ApiError(401, "Invalid credentials");
 
   const isPasswordValid = await user.isPasswordCorrect(password);
   if (!isPasswordValid) throw new ApiError(401, "Invalid credentials");

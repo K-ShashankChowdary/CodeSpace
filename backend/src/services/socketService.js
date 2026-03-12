@@ -5,29 +5,56 @@ import { Room } from "../models/room.model.js";
 dotenv.config({path:"./.env"});
 
 export const initializeSockets = (httpServer) => {
-    // 🚨 FIX 1: Vercel Proxy Stability Settings
     const io = new Server(httpServer, {
         cors: {
             origin: process.env.CORS_ORIGIN,
             credentials: true,
             methods: ["GET", "POST"]
         },
-        pingTimeout: 60000,   // Keeps Vercel tunnel alive longer
-        pingInterval: 25000   // Heartbeat to prevent silent drops
+        pingTimeout: 60000,   
+        pingInterval: 25000
     });
 
+    //Socket Authentication Middleware
+    io.use((socket, next) => {
+        try {
+            // Parse cookies from the handshake headers
+            const cookieHeader = socket.handshake.headers.cookie;
+            if (!cookieHeader) return next(new Error("Authentication error: No cookies found"));
+
+            const cookies = Object.fromEntries(
+                cookieHeader.split(';').map(c => c.trim().split('='))
+            );
+
+            const token = cookies.accessToken;
+            if (!token) return next(new Error("Authentication error: Token missing"));
+
+            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+            socket.data.userId = decoded._id;
+            socket.data.username = decoded.username;
+            next();
+        } catch (err) {
+            next(new Error("Authentication error: Invalid session"));
+        }
+    });
     io.on("connection", (socket) => {
         console.log(`🟢 Socket connected: ${socket.id}`);
 
         socket.on("join-room", async (data) => {
             const rawRoomCode = typeof data === "string" ? data : data.roomCode;
             
-            // 🚨 FIX 2: Sanitize roomCode to guarantee exact string matching
             const roomCode = String(rawRoomCode).trim(); 
             
-            const username = typeof data === "string" ? "Unknown" : data.username;
-            const userId = typeof data === "string" ? null : data.userId;
-            const isHost = data.isHost || false;
+            const username = socket.data.username;
+            const userId = socket.data.userId;
+
+            // Fetch room to verify host
+            const room = await Room.findOne({ roomCode, isActive: true });
+            if (!room) return;
+
+            // 🚨 SECURITY FIX 6: Server-side host verification
+            // Don't trust the client's 'isHost' flag.
+            const isHost = room.host.toString() === userId.toString();
 
             // 1. Join the Socket.io memory room
             socket.join(roomCode);
@@ -40,7 +67,7 @@ export const initializeSockets = (httpServer) => {
             console.log(`👤 User ${username} (Host: ${isHost}) joined room: ${roomCode}`);
             
             if (userId) {
-                // 🚨 FIX 3: ONLY emit student-joined if the person joining is NOT the host
+                // FIX 3: ONLY emit student-joined if the person joining is NOT the host
                 if (!isHost) {
                     // Broadcast to everyone else in this specific roomCode
                     socket.to(roomCode).emit("student-joined", {
@@ -117,24 +144,38 @@ export const initializeSockets = (httpServer) => {
         socket.on("disconnect", async () => {
             console.log(`🔴 Socket disconnected: ${socket.id} (User: ${socket.data.username || 'Unknown'})`);
             
-            if (socket.data.roomCode && socket.data.userId) {
-                if (!socket.data.isHost) {
-                    const activeSockets = await io.in(socket.data.roomCode).fetchSockets();
-                    const hasOtherConnections = activeSockets.some(s => s.data.userId === socket.data.userId);
+            const { roomCode, userId, isHost } = socket.data;
+
+            if (roomCode && userId) {
+                if (isHost) {
+                    // 🚨 FIX 4: Handle Host ungraceful disconnection
+                    console.log(`⚠️ Host disconnected unexpectedly from room: ${roomCode}`);
+                    socket.to(roomCode).emit("room-closed");
+                    try {
+                        await Room.updateOne(
+                            { roomCode, isActive: true },
+                            { isActive: false }
+                        );
+                    } catch (err) {
+                        console.error("DB Update Error on Host Disconnect:", err);
+                    }
+                } else {
+                    const activeSockets = await io.in(roomCode).fetchSockets();
+                    const hasOtherConnections = activeSockets.some(s => s.data.userId === userId);
 
                     if (!hasOtherConnections) {
-                        socket.to(socket.data.roomCode).emit("student-left", {
-                            _id: socket.data.userId,
+                        socket.to(roomCode).emit("student-left", {
+                            _id: userId,
                             username: socket.data.username
                         });
 
                         try {
                             await Room.updateOne(
-                                { roomCode: socket.data.roomCode, isActive: true },
-                                { $pull: { participants: socket.data.userId } }
+                                { roomCode, isActive: true },
+                                { $pull: { participants: userId } }
                             );
                         } catch (err) {
-                            console.error("DB Update Error on Disconnect:", err);
+                            console.error("DB Update Error on Student Disconnect:", err);
                         }
                     }
                 }

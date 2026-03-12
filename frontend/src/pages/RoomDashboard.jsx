@@ -1,15 +1,12 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import api from "../services/api";
-import Button from "../components/ui/Button";
-import Spinner from "../components/ui/Spinner";
 import Toast from "../components/ui/Toast";
+import { socket } from "../utils/socket";
 import { LogOut, LayoutGrid, Users, Play, Info as InfoIcon } from "lucide-react";
 
 function RoomDashboard() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
   const [room, setRoom] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
@@ -29,18 +26,49 @@ function RoomDashboard() {
   };
 
   useEffect(() => {
-    const fetchRoom = async () => {
+    const fetchRoomData = async () => {
       try {
-        const res = await api.get(`/rooms/details/${roomCode}`);
-        setRoom(res.data.data);
+        const [userRes, roomRes] = await Promise.all([
+          api.get("/users/current-user"),
+          api.get(`/rooms/details/${roomCode}`)
+        ]);
+        
+        const user = userRes.data.data;
+        const roomData = roomRes.data.data;
+        
+        setCurrentUser(user);
+        setRoom(roomData);
+
+        // Join socket room for live updates
+        const isHost = roomData.host._id.toString() === user._id.toString();
+        socket.emit("join-room", {
+          roomCode,
+          username: user.username,
+          userId: user._id,
+          isHost
+        });
+        socket.connect();
+
       } catch (err) {
-        setError(err.response?.data?.message || "Failed to load room details.");
+        setError(err.response?.data?.message || "Failed to load classroom details.");
       } finally {
         setLoading(false);
       }
     };
-    fetchRoom();
-  }, [roomCode]);
+    fetchRoomData();
+
+    const handleRoomClosed = () => {
+      showToast("This classroom has been closed. Redirecting...", "error");
+      setTimeout(() => navigate("/"), 2500);
+    };
+
+    socket.on("room-closed", handleRoomClosed);
+
+    return () => {
+      socket.off("room-closed", handleRoomClosed);
+      socket.disconnect();
+    };
+  }, [roomCode, navigate]);
 
   if (loading) {
     return (
