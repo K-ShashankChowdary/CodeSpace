@@ -10,6 +10,7 @@ export const initializeSockets = (httpServer) => {
         cors: { origin: process.env.CORS_ORIGIN, credentials: true }
     });
 
+    // Authentication Middleware
     io.use((socket, next) => {
         try {
             let token = socket.handshake.auth?.token;
@@ -26,6 +27,8 @@ export const initializeSockets = (httpServer) => {
     });
 
     io.on("connection", (socket) => {
+        console.log(`🟢 Socket connected: ${socket.id}`);
+
         socket.on("join-room", async (data) => {
             const { roomCode } = data;
             socket.join(roomCode);
@@ -37,17 +40,15 @@ export const initializeSockets = (httpServer) => {
             const isHost = room.host.toString() === socket.data.userId.toString();
             socket.data.isHost = isHost;
 
-            // 🚨 REFRESH FIX: When teacher joins/refreshes, send them ALL current statuses from DB
             if (isHost) {
-                const allProgress = [];
-                room.studentProgress.forEach(p => {
-                    allProgress.push({
-                        studentId: p.studentId,
-                        results: Object.fromEntries(p.results) 
-                    });
-                });
+                // Send current board state (all problems, all students) to teacher on join/refresh
+                const allProgress = room.studentProgress.map(p => ({
+                    studentId: p.studentId,
+                    results: Object.fromEntries(p.results) 
+                }));
                 socket.emit("sync-entire-leaderboard", allProgress);
             } else {
+                // Notify teacher a student joined
                 socket.to(roomCode).emit("student-joined", { 
                     _id: socket.data.userId, 
                     username: socket.data.username 
@@ -57,30 +58,43 @@ export const initializeSockets = (httpServer) => {
 
         socket.on("student-submission", async (data) => {
             const { roomCode, status, problemId, username } = data;
-            const room = await Room.findOne({ roomCode, isActive: true });
-            if (!room) return;
+            try {
+                const room = await Room.findOne({ roomCode, isActive: true });
+                if (!room) return;
 
-            let progress = room.studentProgress.find(p => p.studentId.toString() === socket.data.userId.toString());
-            if (!progress) {
-                progress = { studentId: socket.data.userId, results: new Map() };
-                room.studentProgress.push(progress);
+                let progress = room.studentProgress.find(p => p.studentId.toString() === socket.data.userId.toString());
+                if (!progress) {
+                    progress = { studentId: socket.data.userId, results: new Map() };
+                    room.studentProgress.push(progress);
+                }
+
+                const currentStatusInDB = progress.results.get(problemId);
+
+                // 🚨 STICKY AC LOGIC:
+                // If the user already has "AC" in the DB, we DO NOT update it.
+                // If they have anything else (WA, RE, TLE) or NOTHING, we update it to the LATEST submission.
+                if (currentStatusInDB !== "AC") {
+                    progress.results.set(problemId, status);
+                    room.markModified('studentProgress');
+                    await room.save();
+                    
+                    // Broadcast the new status (WA, RE, TLE, or the new AC)
+                    io.to(roomCode).emit("leaderboard-update", {
+                        username,
+                        problemId,
+                        status: status 
+                    });
+                } else {
+                    // If already AC, force broadcast AC to keep teacher UI in sync (ignores the new WA)
+                    io.to(roomCode).emit("leaderboard-update", {
+                        username,
+                        problemId,
+                        status: "AC" 
+                    });
+                }
+            } catch (error) {
+                console.error("Submission Error:", error);
             }
-
-            const currentBest = progress.results.get(problemId);
-
-            // 🚨 AC-LOCK: If they already have "AC", don't downgrade the database
-            if (currentBest !== "AC") {
-                progress.results.set(problemId, status);
-                room.markModified('studentProgress');
-                await room.save();
-            }
-            
-            // 🚨 BROADCAST: Always emit the current BEST status to the teacher
-            io.to(roomCode).emit("leaderboard-update", {
-                username,
-                problemId,
-                status: currentBest === "AC" ? "AC" : status 
-            });
         });
 
         socket.on("host-closed-room", async (roomCode) => {
@@ -88,8 +102,6 @@ export const initializeSockets = (httpServer) => {
             await Room.updateOne({ roomCode }, { isActive: false });
         });
 
-        // 🚨 REFRESH FIX: Disconnect no longer closes the room. 
-        // Only "host-closed-room" or a manual session end does.
         socket.on("disconnect", () => {
             console.log(`🔴 Disconnected: ${socket.id}`);
         });
