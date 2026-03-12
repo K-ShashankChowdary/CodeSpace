@@ -281,9 +281,9 @@ function RoomDashboard() {
                     
                     <div className="col-span-3 hidden sm:flex items-center justify-center relative z-10">
                       <span className={`text-[9px] font-black uppercase tracking-[0.15em] px-3 py-1.5 rounded-lg border backdrop-blur-md transition-all ${
-                         problem.difficulty === "Easy" ? "text-green-400 border-green-500/10 bg-green-500/5 group-hover:border-green-500/30" : 
-                         problem.difficulty === "Medium" ? "text-yellow-400 border-yellow-500/10 bg-yellow-500/5 group-hover:border-yellow-500/30" : 
-                         "text-red-400 border-red-500/10 bg-red-500/5 group-hover:border-red-500/30"
+                         problem.difficulty === "Easy" ? "text-green-500 border-green-500/10 bg-green-500/5 group-hover:border-green-500/30" : 
+                         problem.difficulty === "Medium" ? "text-yellow-500 border-yellow-500/10 bg-yellow-500/5 group-hover:border-yellow-500/30" : 
+                         "text-red-500 border-red-500/10 bg-red-500/5 group-hover:border-red-500/30"
                        }`}>
                         {problem.difficulty || "Standard"}
                       </span>
