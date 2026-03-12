@@ -1,12 +1,11 @@
 import dotenv from "dotenv";
-import { Server } from "socket.io"; // 🚨 This must be capitalized
+import { Server } from "socket.io"; 
 import jwt from "jsonwebtoken";
 import { Room } from "../models/room.model.js";
 
 dotenv.config({ path: "./.env" });
 
 export const initializeSockets = (httpServer) => {
-    // 🚨 Ensure this uses the capitalized 'Server' imported above
     const io = new Server(httpServer, {
         cors: {
             origin: process.env.CORS_ORIGIN,
@@ -17,13 +16,13 @@ export const initializeSockets = (httpServer) => {
         pingInterval: 25000
     });
 
-    // Socket Authentication Middleware
+    // Authentication Middleware
     io.use((socket, next) => {
         try {
-            // 1. Check the 'auth' object first (sent via socket.js auth callback)
+            // 1. Check Auth Payload (LocalStorage Token)
             let token = socket.handshake.auth?.token;
 
-            // 2. Fallback to cookies if auth payload is missing
+            // 2. Fallback to Cookies
             if (!token && socket.handshake.headers.cookie) {
                 const cookies = Object.fromEntries(
                     socket.handshake.headers.cookie.split(';').map(c => c.trim().split('='))
@@ -32,7 +31,6 @@ export const initializeSockets = (httpServer) => {
             }
 
             if (!token) {
-                console.error("🛑 Socket Auth Failed: No token found in any source");
                 return next(new Error("Authentication error: Token missing"));
             }
 
@@ -41,7 +39,6 @@ export const initializeSockets = (httpServer) => {
             socket.data.username = decoded.username;
             next();
         } catch (err) {
-            console.error("🛑 Socket Auth Failed: Invalid JWT", err.message);
             next(new Error("Authentication error: Invalid session"));
         }
     });
@@ -64,6 +61,8 @@ export const initializeSockets = (httpServer) => {
                 socket.join(roomCode);
                 socket.data.roomCode = roomCode;
                 socket.data.isHost = isHost;
+                socket.data.username = username;
+                socket.data.userId = userId;
 
                 console.log(`👤 User ${username} joined room: ${roomCode}`);
                 
@@ -75,7 +74,7 @@ export const initializeSockets = (httpServer) => {
                     );
                 }
             } catch (error) {
-                console.error("Socket Join-Room Error:", error);
+                console.error("Join Room Error:", error);
             }
         });
 
@@ -87,7 +86,6 @@ export const initializeSockets = (httpServer) => {
 
         socket.on("host-closed-room", async (rawRoomCode) => {
             const roomCode = String(rawRoomCode).trim();
-            console.log(`⚠️ Host closed room: ${roomCode}`);
             socket.to(roomCode).emit("room-closed");
         });
 
@@ -95,7 +93,6 @@ export const initializeSockets = (httpServer) => {
             console.log(`🔴 Socket disconnected: ${socket.id}`);
             const { roomCode, userId, isHost } = socket.data;
             if (roomCode && userId && isHost) {
-                console.log(`⚠️ Host disconnected unexpectedly from room: ${roomCode}`);
                 socket.to(roomCode).emit("room-closed");
                 await Room.updateOne({ roomCode, isActive: true }, { isActive: false });
             }
