@@ -6,8 +6,8 @@ import jwt from "jsonwebtoken";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: false, // Must be false for HTTP (AWS IP)
-  sameSite: "lax",
+  secure: true, // Required for sameSite: "none" over HTTPS
+  sameSite: "none", // Required for cross-origin cookie delivery from Vercel to DuckDNS
   path: "/", 
 };
 
