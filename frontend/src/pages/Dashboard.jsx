@@ -19,6 +19,7 @@ function Dashboard() {
   const [modalSearch, setModalSearch] = useState("");
   const [selectedProblems, setSelectedProblems] = useState([]);
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   
   // Toast Notification State
   const [toast, setToast] = useState(null);
@@ -61,7 +62,8 @@ function Dashboard() {
 
   const handleJoinRoom = async (e) => {
     e.preventDefault();
-    if (!roomCodeInput.trim()) return;
+    if (!roomCodeInput.trim() || isJoiningRoom) return;
+    setIsJoiningRoom(true);
     try {
       const res = await api.post("/rooms/join", { roomCode: roomCodeInput });
       const { roomCode } = res.data.data;
@@ -69,6 +71,8 @@ function Dashboard() {
     } catch (error) {
       console.error("Failed to join room", error);
       showToast(error.response?.data?.message || "Invalid or expired room code", "error");
+    } finally {
+      setIsJoiningRoom(false);
     }
   };
 
@@ -143,8 +147,8 @@ function Dashboard() {
                 maxLength={6}
                 className="w-full font-mono uppercase bg-zinc-900/30 border-zinc-800/40 text-xs"
               />
-              <Button type="submit" variant="primary" disabled={!roomCodeInput.trim()} className="w-full text-[10px]">
-                Join Classroom
+              <Button type="submit" variant="primary" disabled={!roomCodeInput.trim() || isJoiningRoom} className="w-full text-[10px]">
+                {isJoiningRoom ? "Joining..." : "Join Classroom"}
               </Button>
             </form>
           </div>

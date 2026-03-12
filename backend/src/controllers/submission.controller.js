@@ -9,6 +9,10 @@ import mongoose from "mongoose";
 const submitCode = asyncHandler(async (req, res) => {
     const { problemId, code, language, executionType } = req.body;
 
+    if (!mongoose.Types.ObjectId.isValid(problemId)) {
+        throw new ApiError(400, "Invalid problem ID format");
+    }
+
     if ([problemId, code, language].some((field) => !field || field.trim() === "")) {
         throw new ApiError(400, "All fields are required");
     }
