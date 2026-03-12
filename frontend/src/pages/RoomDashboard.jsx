@@ -26,12 +26,8 @@ function RoomDashboard() {
 
   const handleLogout = async () => {
     try {
-      if (socket.connected) {
-        socket.disconnect();
-      }
-      // 🚨 CRITICAL: Clear the token so the socket doesn't auto-connect on the login page
+      if (socket.connected) socket.disconnect();
       localStorage.removeItem("accessToken");
-      
       await api.post("/users/logout");
       window.location.href = "/auth";
     } catch (error) {
@@ -72,9 +68,11 @@ function RoomDashboard() {
   };
 
   useEffect(() => {
+    // 🚨 REFRESH FIX: Re-connect socket if it died on refresh
     if (!socket.connected) {
       socket.connect();
     }
+
     const fetchRoomData = async () => {
       try {
         const [userRes, roomRes] = await Promise.all([
@@ -88,12 +86,11 @@ function RoomDashboard() {
         setCurrentUser(user);
         setRoom(roomData);
 
-        // Join socket room for live updates
         const userIsHost = roomData.host._id.toString() === user._id.toString();
         setIsHost(userIsHost);
 
-        const emitJoinRoom = () => {
-          console.log("[RoomDashboard Socket] Emitting join-room for:", roomCode);
+        // Helper to emit join
+        const emitJoin = () => {
           socket.emit("join-room", {
             roomCode,
             username: user.username,
@@ -102,22 +99,25 @@ function RoomDashboard() {
           });
         };
 
-        socket.on("connect", emitJoinRoom);
+        // If socket connects later
+        socket.on("connect", emitJoin);
         
-        // If it was already connected from a previous page
+        // If already connected (most common)
         if (socket.connected) {
-          emitJoinRoom();
+          emitJoin();
         }
 
       } catch (err) {
+        console.error("Room Details Error:", err);
         setError(err.response?.data?.message || "Failed to load classroom details.");
       } finally {
         setLoading(false);
       }
     };
+
     fetchRoomData();
 
-    // Teacher listeners
+    // Live Listeners
     const handleStudentJoined = (student) => {
       showToast(`Student joined: ${student.username}`, "info");
       setRoom((prev) => {
@@ -138,7 +138,7 @@ function RoomDashboard() {
     const handleRoomClosed = () => {
       showToast("The host has closed the classroom. Exiting...", "error", 3000);
       setTimeout(() => {
-        socket.disconnect();
+        if (socket.connected) socket.disconnect();
         navigate("/");
       }, 3000);
     };
@@ -148,6 +148,7 @@ function RoomDashboard() {
     socket.on("room-closed", handleRoomClosed);
 
     return () => {
+      socket.off("connect");
       socket.off("student-joined", handleStudentJoined);
       socket.off("student-left", handleStudentLeft);
       socket.off("room-closed", handleRoomClosed);
@@ -164,9 +165,10 @@ function RoomDashboard() {
 
   if (error || !room) {
     return (
-      <div className="h-screen bg-[#050505] flex flex-col items-center justify-center text-zinc-300 gap-4">
-        <div className="text-red-400 bg-red-500/10 border border-red-500/20 px-6 py-4 rounded-xl">
-          {error || "Room not found."}
+      <div className="h-screen bg-[#050505] flex flex-col items-center justify-center text-zinc-300 gap-4 text-center p-6">
+        <div className="text-red-400 bg-red-500/10 border border-red-500/20 px-6 py-4 rounded-xl max-w-md">
+          <h3 className="font-bold mb-1 italic uppercase tracking-tighter">Access Denied</h3>
+          <p className="text-sm opacity-80">{error || "This classroom is no longer active or you don't have access."}</p>
         </div>
         <Button variant="secondary" onClick={() => navigate("/")}>Return to Dashboard</Button>
       </div>
@@ -237,20 +239,18 @@ function RoomDashboard() {
       <main className="flex-1 flex flex-col overflow-hidden bg-[#020202] relative shadow-[inset_1px_0_0_0_rgba(255,255,255,0.03)]">
         <header className="h-24 px-12 flex items-center justify-between border-b border-zinc-800/30 bg-[#0a0a0a]/40 backdrop-blur-2xl sticky top-0 z-10 shrink-0">
           <div>
-            <h2 className="text-3xl font-black text-white tracking-tighter italic">Problem Set</h2>
+            <h2 className="text-3xl font-black text-white tracking-tighter italic">Session Workspace</h2>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-12">
           <div className="w-full bg-[#0a0a0a] border border-zinc-800/60 rounded-2xl overflow-hidden shadow-2xl">
-            {/* Table Header */}
             <div className="grid grid-cols-12 gap-4 p-4 border-b border-zinc-800/60 bg-[#050505] text-[10px] font-bold uppercase tracking-widest text-zinc-500">
               <div className="col-span-12 sm:col-span-6 pl-6">Title</div>
               <div className="col-span-3 hidden sm:block text-center">Difficulty</div>
               <div className="col-span-3 hidden sm:block"></div>
             </div>
 
-            {/* Table Body */}
             <div className="divide-y divide-zinc-800/50">
               {room.problems && room.problems.length > 0 ? (
                 room.problems.map((problem) => (
@@ -259,10 +259,7 @@ function RoomDashboard() {
                     onClick={() => navigate(`/problem/${problem._id}?room=${room.roomCode}`)}
                     className="relative grid grid-cols-12 gap-4 p-5 items-center cursor-pointer transition-all duration-300 group overflow-hidden"
                   >
-                    {/* Glassmorphism Hover Background */}
                     <div className="absolute inset-0 bg-blue-500/0 group-hover:bg-blue-500/5 group-hover:backdrop-blur-sm transition-all duration-500" />
-                    
-                    {/* Left Accent Border */}
                     <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-transparent group-hover:bg-blue-500 transition-all duration-300 transform scale-y-0 group-hover:scale-y-100" />
 
                     <div className="col-span-12 sm:col-span-6 pl-4 relative z-10">
@@ -271,36 +268,24 @@ function RoomDashboard() {
                           <h3 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors truncate tracking-tight">
                             {problem.title}
                           </h3>
-                          <div className="mt-1 sm:hidden flex items-center gap-2">
-                            <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${
-                               problem.difficulty === "Easy" ? "text-green-400 border-green-500/20 bg-green-500/10" : 
-                               problem.difficulty === "Medium" ? "text-yellow-400 border-yellow-500/20 bg-yellow-500/10" : 
-                               "text-red-400 border-red-500/20 bg-red-500/10"
-                             }`}>
-                              {problem.difficulty || "Standard"}
-                            </span>
-                            <span className="text-[10px] text-blue-500 font-black uppercase tracking-tighter italic">Solve ›</span>
-                          </div>
                         </div>
                       </div>
                     </div>
                     
                     <div className="col-span-3 hidden sm:flex items-center justify-center relative z-10">
-                      <span className={`text-[9px] font-black uppercase tracking-[0.15em] px-3 py-1.5 rounded-lg border backdrop-blur-md transition-all ${
-                         problem.difficulty === "Easy" ? "text-green-500 border-green-500/10 bg-green-500/5 group-hover:border-green-500/30" : 
-                         problem.difficulty === "Medium" ? "text-yellow-500 border-yellow-500/10 bg-yellow-500/5 group-hover:border-yellow-500/30" : 
-                         "text-red-500 border-red-500/10 bg-red-500/5 group-hover:border-red-500/30"
+                      <span className={`text-[9px] font-black uppercase tracking-[0.15em] px-3 py-1.5 rounded-lg border backdrop-blur-md ${
+                         problem.difficulty === "Easy" ? "text-green-400 border-green-500/10 bg-green-500/5" : 
+                         problem.difficulty === "Medium" ? "text-yellow-400 border-yellow-500/10 bg-yellow-500/5" : 
+                         "text-red-400 border-red-500/10 bg-red-500/5"
                        }`}>
                         {problem.difficulty || "Standard"}
                       </span>
                     </div>
 
                     <div className="col-span-3 hidden sm:flex items-center justify-end pr-6 relative z-10">
-                      <div className="flex items-center gap-2 px-5 py-2 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-500 font-black text-[10px] uppercase tracking-widest group-hover:bg-blue-600 group-hover:border-blue-500 group-hover:text-white group-hover:shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all duration-300 transform group-hover:scale-105">
+                      <div className="flex items-center gap-2 px-5 py-2 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-500 font-black text-[10px] uppercase tracking-widest group-hover:bg-blue-600 group-hover:text-white transition-all transform group-hover:scale-105">
                         <span>Solve</span>
-                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
+                        <Play className="w-3.5 h-3.5 fill-current" />
                       </div>
                     </div>
                   </div>
@@ -309,7 +294,6 @@ function RoomDashboard() {
                  <div className="py-20 text-center">
                   <div className="text-4xl mb-4 opacity-50">📁</div>
                   <h3 className="text-lg font-bold text-zinc-300">No problems assigned</h3>
-                  <p className="text-zinc-500 text-sm mt-2">The host has not added any problems to this room.</p>
                 </div>
               )}
             </div>
