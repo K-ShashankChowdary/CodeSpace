@@ -15,17 +15,20 @@ function IDE() {
   const roomCode = searchParams.get("room");
   const navigate = useNavigate();
 
-  // State
+  // Classroom State
   const [room, setRoom] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [isHost, setIsHost] = useState(false);
   const [liveStatuses, setLiveStatuses] = useState({});
+
+  // Problem & IDE State
   const [problem, setProblem] = useState(null);
   const [isFetchingProblem, setIsFetchingProblem] = useState(true);
   const [activeTab, setActiveTab] = useState("description");
   const activeTabRef = useRef(activeTab);
   const [history, setHistory] = useState([]);
   const [activeTestCase, setActiveTestCase] = useState(0);
+
   const [code, setCode] = useState(`#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n \n \treturn 0;\n}`);
   const [output, setOutput] = useState("");
   const [status, setStatus] = useState("Idle");
@@ -36,7 +39,7 @@ function IDE() {
 
   const showToast = (message, type = "info") => setToast({ message, type });
 
-  // --- EFFECT 1: INITIAL DATA FETCH & DB HYDRATION ---
+  // --- EFFECT 1: INITIAL DATA FETCH ---
   useEffect(() => {
     if (!socket.connected) socket.connect();
 
@@ -57,11 +60,11 @@ function IDE() {
           setRoom(roomData);
           setIsHost(roomData.host._id.toString() === user._id.toString());
 
-          // 🚨 HYDRATE: Set leaderboard status from DB (Sticky logic already applied in DB)
+          // Hydrate leaderboard status from DB
           const initialStatuses = {};
           if (roomData.studentProgress) {
             roomData.studentProgress.forEach(prog => {
-              const student = roomData.participants.find(p => p._id === prog.studentId);
+              const student = roomData.participants?.find(p => p._id === prog.studentId);
               const statusFromDB = prog.results[id]; 
               if (student && statusFromDB) initialStatuses[student.username] = statusFromDB;
             });
@@ -71,6 +74,7 @@ function IDE() {
           socket.emit("join-room", { roomCode });
         }
       } catch (error) {
+        console.error("Fetch Error:", error);
         navigate("/");
       } finally {
         setIsFetchingProblem(false);
@@ -88,7 +92,6 @@ function IDE() {
   useEffect(() => {
     if (!roomCode || !isHost) return;
 
-    // Handle full board sync on refresh/join
     const handleFullSync = (allProgress) => {
       const newStatuses = {};
       allProgress.forEach(prog => {
@@ -101,9 +104,7 @@ function IDE() {
     const handleUpdate = (data) => {
       if (data.problemId === id) {
         setLiveStatuses((prev) => {
-          // 🚨 STICKY LOCK: If we currently show AC, ignore any updates
           if (prev[data.username] === "AC") return prev;
-          // Otherwise, update with the status (latest WA, RE, etc.)
           return { ...prev, [data.username]: data.status };
         });
       }
@@ -111,7 +112,7 @@ function IDE() {
 
     const handleStudentJoined = (student) => {
       setRoom((prev) => {
-        if (!prev || prev.participants.some(p => p._id === student._id)) return prev;
+        if (!prev || prev.participants?.some(p => p._id === student._id)) return prev;
         showToast(`${student.username} joined the session`, "info");
         return { ...prev, participants: [...prev.participants, student] };
       });
@@ -128,7 +129,28 @@ function IDE() {
     };
   }, [isHost, roomCode, id, room]);
 
-  // Handle Logout
+  // --- EFFECT 3: STUDENT LISTENERS ---
+  useEffect(() => {
+    if (isHost || !roomCode) return;
+    const handleClosed = () => {
+      showToast("Classroom closed by host", "error");
+      setTimeout(() => navigate("/"), 2000);
+    };
+    socket.on("room-closed", handleClosed);
+    return () => socket.off("room-closed", handleClosed);
+  }, [isHost, roomCode, navigate]);
+
+  // Tab & History Logic
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+  useEffect(() => { if (activeTab === "submissions") fetchHistory(); }, [activeTab]);
+
+  const fetchHistory = async () => {
+    try {
+      const response = await api.get(`/submissions/history/${id}`);
+      setHistory(Array.isArray(response.data.data) ? response.data.data : []);
+    } catch (error) { setHistory([]); }
+  };
+
   const handleLogout = async () => {
     if (socket.connected) socket.disconnect();
     localStorage.removeItem("accessToken");
@@ -136,16 +158,74 @@ function IDE() {
     window.location.href = "/auth";
   };
 
-  // Logic for Submission/Polling (Keep your existing implementation)
-  // ... handleExecution, pollJobStatus, renderConsoleContent, handleCloseRoom ...
+  const handleCloseRoom = async () => {
+    if (!roomCode) { navigate("/"); return; }
+    showToast("Closing classroom...", "error", 2000);
+    socket.emit("host-closed-room", roomCode);
+    try {
+      await api.post(`/rooms/close/${roomCode}`);
+    } finally {
+      setTimeout(() => navigate("/"), 2000);
+    }
+  };
 
-  if (isFetchingProblem) return <div className="h-screen bg-[#0a0a0a] flex items-center justify-center"><Spinner size="sm" label="Syncing Leaderboard..." /></div>;
+  const handleExecution = async (type) => {
+    if (!code.trim()) return;
+    type === "run" ? setIsRunning(true) : setIsSubmitting(true);
+    setStatus("Queued");
+    setOutput("Processing...");
+    setActiveTab("description");
+    setActiveTestCase(0);
+    try {
+      const response = await api.post("/submissions/submit", {
+        problemId: id, language: "cpp", code: code, executionType: type
+      });
+      pollJobStatus(response.data.data.jobId, type);
+    } catch (error) {
+      setIsRunning(false); setIsSubmitting(false);
+    }
+  };
+
+  const pollJobStatus = (jobId, type) => {
+    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await api.get(`/submissions/status/${jobId}`);
+        const jobData = response.data.data;
+        if (jobData && jobData.status !== "Pending" && jobData.status !== "Executing") {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+          setStatus(jobData.status);
+          setOutput(jobData.output || "");
+          setIsRunning(false);
+          setIsSubmitting(false);
+          if (type === "submit" && roomCode && currentUser) {
+            socket.emit("student-submission", {
+              roomCode, username: currentUser.username, status: jobData.status, problemId: id
+            });
+          }
+        }
+      } catch (error) {
+        clearInterval(pollingIntervalRef.current);
+        setIsRunning(false); setIsSubmitting(false);
+      }
+    }, 1500);
+  };
+
+  const renderConsoleContent = () => {
+    if (!output) return <p className="text-sm font-mono text-zinc-500 italic mt-2">Run code to see output...</p>;
+    // ... (Keep your detailed console rendering logic here)
+    return <div className="text-zinc-300 font-mono text-sm">{typeof output === 'string' ? output : JSON.stringify(output)}</div>;
+  };
+
+  if (isFetchingProblem) return <div className="h-screen bg-[#0a0a0a] flex items-center justify-center"><Spinner size="sm" label="Syncing..." /></div>;
 
   return (
     <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
       {isHost ? (
+         /* --- TEACHER VIEW --- */
          <div className="min-h-screen bg-[#050505] text-white p-8 font-sans">
             <header className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-6">
                <div className="flex items-center gap-6">
@@ -156,7 +236,7 @@ function IDE() {
                    <span className="text-[10px] font-bold uppercase tracking-widest">Return to Room</span>
                  </button>
                  <h1 className="text-xl font-bold flex gap-3">
-                   <span className="text-blue-400">Live Leaderboard:</span>
+                   <span className="text-blue-400">Live Status:</span>
                    <span>{problem?.title}</span>
                  </h1>
                </div>
@@ -164,11 +244,11 @@ function IDE() {
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-               {room?.participants?.filter(p => p._id !== currentUser?._id).map((student) => {
+               {room?.participants?.filter(p => p?._id !== currentUser?._id).map((student) => {
                   const statusStr = liveStatuses[student.username] || "In Progress";
                   const isAC = statusStr === "AC";
                   return (
-                    <div key={student._id} className={`bg-[#0a0a0a] border rounded-2xl p-6 transition-all ${isAC ? "border-green-500/30" : "border-zinc-800"}`}>
+                    <div key={student._id} className={`bg-[#0a0a0a] border rounded-2xl p-6 transition-all ${isAC ? "border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.1)]" : "border-zinc-800"}`}>
                        <h3 className="text-zinc-100 font-bold mb-4">{student.username}</h3>
                        <div className={`px-3 py-2 rounded-lg border text-xs font-bold ${isAC ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-blue-500/10 text-blue-500 border-blue-500/20"}`}>
                          {getFullStatus(statusStr)}
@@ -179,9 +259,62 @@ function IDE() {
             </div>
          </div>
       ) : (
-        /* Student IDE View remains exactly as it was in your previous version */
+        /* --- STUDENT VIEW (The missing part causing the black screen) --- */
         <div className="flex-1 flex flex-col overflow-hidden">
-           {/* ... Student Header & Editor ... */}
+          <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
+            <div className="flex items-center gap-6">
+              <button onClick={() => navigate(roomCode ? `/room/${roomCode}` : "/")} className="flex items-center gap-2 group text-zinc-500 hover:text-white transition-colors">
+                <span className="text-[10px] font-bold uppercase tracking-widest">{roomCode ? "‹ Room" : "‹ Dashboard"}</span>
+              </button>
+              <h1 className="text-sm font-black text-white italic tracking-tight">{problem?.title}</h1>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-800">
+                <div className={`w-2 h-2 rounded-full ${status === "AC" ? "bg-green-500" : "bg-blue-500 animate-pulse"}`}></div>
+                <span className="text-[10px] font-bold uppercase tracking-widest">{getFullStatus(status)}</span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-400">Logout</Button>
+            </div>
+          </header>
+
+          <div className="flex-1 flex gap-2 p-2 overflow-hidden">
+            {/* Left: Problem Desc */}
+            <div className="w-5/12 bg-[#0d0d0d] rounded-xl border border-zinc-800 flex flex-col overflow-hidden">
+              <div className="flex border-b border-zinc-800">
+                <button onClick={() => setActiveTab("description")} className={`px-6 py-3 text-[10px] font-bold uppercase ${activeTab === "description" ? "text-white border-b-2" : "text-zinc-500"}`}>Description</button>
+                <button onClick={() => setActiveTab("submissions")} className={`px-6 py-3 text-[10px] font-bold uppercase ${activeTab === "submissions" ? "text-white border-b-2" : "text-zinc-500"}`}>History</button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                {activeTab === "description" ? (
+                  <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">{problem?.description}</p>
+                ) : (
+                  <div className="space-y-3">
+                    {history.map((sub, i) => (
+                      <div key={i} className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl flex justify-between items-center">
+                        <StatusBadge status={sub.status} />
+                        <span className="text-xs font-mono text-zinc-500">{new Date(sub.createdAt).toLocaleTimeString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right: Editor */}
+            <div className="w-7/12 flex flex-col gap-2">
+              <div className="flex-1 bg-[#0d0d0d] rounded-xl border border-zinc-800 overflow-hidden">
+                <CodeEditor code={code} setCode={setCode} />
+              </div>
+              <div className="h-1/3 bg-[#0d0d0d] rounded-xl border border-zinc-800 flex flex-col overflow-hidden">
+                <div className="px-6 py-2 border-b border-zinc-800 text-[10px] font-bold text-zinc-500 uppercase">Console</div>
+                <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">{renderConsoleContent()}</div>
+              </div>
+              <div className="flex justify-end gap-3 h-14 items-center">
+                <Button variant="secondary" onClick={() => handleExecution("run")} disabled={isRunning || isSubmitting}>Run</Button>
+                <Button variant="success" onClick={() => handleExecution("submit")} disabled={isRunning || isSubmitting}>Submit</Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
