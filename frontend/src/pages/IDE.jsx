@@ -82,7 +82,6 @@ function IDE() {
           };
 
           socket.on("connect", emitJoinRoom);
-          socket.connect();
           
           if (socket.connected) emitJoinRoom();
         }
@@ -159,7 +158,6 @@ function IDE() {
     const handleRoomClosed = () => {
       showToast("The host has closed the classroom. Exiting...", "error", 3000);
       setTimeout(() => {
-        socket.disconnect();
         navigate("/");
       }, 3000);
     };
@@ -201,7 +199,6 @@ function IDE() {
       console.error("Failed to close room:", error);
     } finally {
       setTimeout(() => {
-        socket.disconnect();
         navigate("/");
       }, 2000); 
     }

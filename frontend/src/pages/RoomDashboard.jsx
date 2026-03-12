@@ -94,7 +94,6 @@ function RoomDashboard() {
         };
 
         socket.on("connect", emitJoinRoom);
-        socket.connect();
         
         // If it was already connected from a previous page
         if (socket.connected) {
