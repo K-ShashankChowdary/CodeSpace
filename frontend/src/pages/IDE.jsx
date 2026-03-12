@@ -15,18 +15,17 @@ function IDE() {
   const roomCode = searchParams.get("room");
   const navigate = useNavigate();
 
+  // State
   const [room, setRoom] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [isHost, setIsHost] = useState(false);
   const [liveStatuses, setLiveStatuses] = useState({});
-
   const [problem, setProblem] = useState(null);
   const [isFetchingProblem, setIsFetchingProblem] = useState(true);
   const [activeTab, setActiveTab] = useState("description");
   const activeTabRef = useRef(activeTab);
   const [history, setHistory] = useState([]);
   const [activeTestCase, setActiveTestCase] = useState(0);
-
   const [code, setCode] = useState(`#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n \n \treturn 0;\n}`);
   const [output, setOutput] = useState("");
   const [status, setStatus] = useState("Idle");
@@ -37,7 +36,7 @@ function IDE() {
 
   const showToast = (message, type = "info") => setToast({ message, type });
 
-  // --- EFFECT 1: INITIAL LOAD & HYDRATION ---
+  // --- EFFECT 1: INITIAL DATA FETCH & DB HYDRATION ---
   useEffect(() => {
     if (!socket.connected) socket.connect();
 
@@ -56,16 +55,15 @@ function IDE() {
           const roomRes = await api.get(`/rooms/details/${roomCode}`);
           const roomData = roomRes.data.data;
           setRoom(roomData);
+          setIsHost(roomData.host._id.toString() === user._id.toString());
 
-          const userIsHost = roomData.host._id.toString() === user._id.toString();
-          setIsHost(userIsHost);
-
-          // Initial hydration from DB
+          // 🚨 HYDRATE: Set leaderboard status from DB (Sticky logic already applied in DB)
           const initialStatuses = {};
           if (roomData.studentProgress) {
             roomData.studentProgress.forEach(prog => {
               const student = roomData.participants.find(p => p._id === prog.studentId);
-              if (student && prog.results[id]) initialStatuses[student.username] = prog.results[id];
+              const statusFromDB = prog.results[id]; 
+              if (student && statusFromDB) initialStatuses[student.username] = statusFromDB;
             });
           }
           setLiveStatuses(initialStatuses);
@@ -90,6 +88,7 @@ function IDE() {
   useEffect(() => {
     if (!roomCode || !isHost) return;
 
+    // Handle full board sync on refresh/join
     const handleFullSync = (allProgress) => {
       const newStatuses = {};
       allProgress.forEach(prog => {
@@ -100,13 +99,14 @@ function IDE() {
     };
 
     const handleUpdate = (data) => {
-      setLiveStatuses((prev) => {
-        // AC-LOCK: Don't downgrade UI if student already solved it
-        if (prev[data.username] === "AC") return prev;
-        // Only update UI if the submission belongs to the current problem dashboard
-        if (data.problemId === id) return { ...prev, [data.username]: data.status };
-        return prev;
-      });
+      if (data.problemId === id) {
+        setLiveStatuses((prev) => {
+          // 🚨 STICKY LOCK: If we currently show AC, ignore any updates
+          if (prev[data.username] === "AC") return prev;
+          // Otherwise, update with the status (latest WA, RE, etc.)
+          return { ...prev, [data.username]: data.status };
+        });
+      }
     };
 
     const handleStudentJoined = (student) => {
@@ -128,19 +128,7 @@ function IDE() {
     };
   }, [isHost, roomCode, id, room]);
 
-  // --- EFFECT 3: STUDENT LISTENERS ---
-  useEffect(() => {
-    if (isHost || !roomCode) return;
-    const handleClosed = () => {
-      showToast("Classroom closed by host", "error");
-      setTimeout(() => navigate("/"), 2000);
-    };
-    socket.on("room-closed", handleClosed);
-    return () => socket.off("room-closed", handleClosed);
-  }, [isHost, roomCode, navigate]);
-
-  // Rest of Logic...
-  const fetchHistory = async () => { /* ...existing fetchHistory... */ };
+  // Handle Logout
   const handleLogout = async () => {
     if (socket.connected) socket.disconnect();
     localStorage.removeItem("accessToken");
@@ -148,57 +136,52 @@ function IDE() {
     window.location.href = "/auth";
   };
 
-  const handleCloseRoom = async () => { /* ...existing handleCloseRoom... */ };
-  const handleExecution = async (type) => { /* ...existing handleExecution... */ };
-  const pollJobStatus = (jobId, type) => { /* ...existing pollJobStatus... */ };
-  const renderConsoleContent = () => { /* ...existing renderConsole... */ };
+  // Logic for Submission/Polling (Keep your existing implementation)
+  // ... handleExecution, pollJobStatus, renderConsoleContent, handleCloseRoom ...
 
-  if (isFetchingProblem) return <div className="h-screen bg-[#0a0a0a] flex items-center justify-center"><Spinner size="sm" label="Syncing..." /></div>;
+  if (isFetchingProblem) return <div className="h-screen bg-[#0a0a0a] flex items-center justify-center"><Spinner size="sm" label="Syncing Leaderboard..." /></div>;
 
   return (
     <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
-      {/* Teacher View: Leaderboard */}
       {isHost ? (
-         <div className="min-h-screen bg-[#050505] text-white p-8 font-sans relative">
+         <div className="min-h-screen bg-[#050505] text-white p-8 font-sans">
             <header className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-6">
-              <div className="flex items-center gap-6">
-                <button onClick={() => navigate(`/room/${roomCode}`)} className="flex items-center gap-2 group text-zinc-500 hover:text-white transition-colors">
-                  <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 group-hover:border-blue-500/50 transition-all">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
-                  </div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Return to Room</span>
-                </button>
-                <div>
-                  <h1 className="text-xl font-bold flex items-center gap-3">
-                    <span className="text-blue-400">Live Status:</span>
-                    <span className="text-white">{problem?.title}</span>
-                  </h1>
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="text-zinc-500 hover:text-red-400">Logout</Button>
+               <div className="flex items-center gap-6">
+                 <button onClick={() => navigate(`/room/${roomCode}`)} className="flex items-center gap-2 group text-zinc-500 hover:text-white transition-colors">
+                   <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 transition-all">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                   </div>
+                   <span className="text-[10px] font-bold uppercase tracking-widest">Return to Room</span>
+                 </button>
+                 <h1 className="text-xl font-bold flex gap-3">
+                   <span className="text-blue-400">Live Leaderboard:</span>
+                   <span>{problem?.title}</span>
+                 </h1>
+               </div>
+               <Button variant="ghost" size="sm" onClick={handleLogout} className="text-zinc-500 hover:text-red-400">Logout</Button>
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {room?.participants?.filter(p => p._id !== currentUser?._id).map((student) => {
-                const statusStr = liveStatuses[student.username] || "In Progress";
-                const isAC = statusStr === "AC";
-                return (
-                  <div key={student._id} className={`bg-[#0a0a0a] border rounded-2xl p-6 relative transition-all ${isAC ? "border-green-500/30" : "border-zinc-800"}`}>
-                    <h3 className="text-zinc-100 font-bold mb-4">{student.username}</h3>
-                    <div className={`px-3 py-2 rounded-lg border text-xs font-bold ${isAC ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-blue-500/10 text-blue-500 border-blue-500/20"}`}>
-                      {getFullStatus(statusStr)}
+               {room?.participants?.filter(p => p._id !== currentUser?._id).map((student) => {
+                  const statusStr = liveStatuses[student.username] || "In Progress";
+                  const isAC = statusStr === "AC";
+                  return (
+                    <div key={student._id} className={`bg-[#0a0a0a] border rounded-2xl p-6 transition-all ${isAC ? "border-green-500/30" : "border-zinc-800"}`}>
+                       <h3 className="text-zinc-100 font-bold mb-4">{student.username}</h3>
+                       <div className={`px-3 py-2 rounded-lg border text-xs font-bold ${isAC ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-blue-500/10 text-blue-500 border-blue-500/20"}`}>
+                         {getFullStatus(statusStr)}
+                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+               })}
             </div>
          </div>
       ) : (
-        /* Student View: IDE */
+        /* Student IDE View remains exactly as it was in your previous version */
         <div className="flex-1 flex flex-col overflow-hidden">
-           {/* ... existing Student Header and Split IDE JSX ... */}
+           {/* ... Student Header & Editor ... */}
         </div>
       )}
     </div>
