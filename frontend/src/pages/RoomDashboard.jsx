@@ -12,12 +12,16 @@ function RoomDashboard() {
   const navigate = useNavigate();
   const [room, setRoom] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [isHost, setIsHost] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
 
-  const showToast = (message, type = "info") => {
+  const showToast = (message, type = "info", duration = 3000) => {
     setToast({ message, type });
+    if (duration) {
+      setTimeout(() => setToast(null), duration);
+    }
   };
 
   const handleLogout = async () => {
@@ -27,6 +31,37 @@ function RoomDashboard() {
     } catch (error) {
       console.error("Logout failed:", error);
       showToast("Failed to logout. Please try again.", "error");
+    }
+  };
+
+  const handleCloseRoom = async () => {
+    if (!roomCode) return;
+    showToast("Closing classroom for all students...", "error", 2000);
+    socket.emit("host-closed-room", roomCode);
+    try {
+      await api.post(`/rooms/close/${roomCode}`);
+    } catch (error) {
+      console.error("Failed to close room:", error);
+    } finally {
+      setTimeout(() => {
+        socket.disconnect();
+        navigate("/");
+      }, 2000);
+    }
+  };
+
+  const handleExitRoom = async () => {
+    if (!roomCode) return;
+    showToast("Exiting classroom...", "info", 1500);
+    try {
+      await api.post(`/rooms/leave/${roomCode}`);
+    } catch (error) {
+      console.error("Failed to leave room:", error);
+    } finally {
+      setTimeout(() => {
+        socket.disconnect();
+        navigate("/");
+      }, 1500);
     }
   };
 
@@ -45,12 +80,13 @@ function RoomDashboard() {
         setRoom(roomData);
 
         // Join socket room for live updates
-        const isHost = roomData.host._id.toString() === user._id.toString();
+        const userIsHost = roomData.host._id.toString() === user._id.toString();
+        setIsHost(userIsHost);
         socket.emit("join-room", {
           roomCode,
           username: user.username,
           userId: user._id,
-          isHost
+          isHost: userIsHost
         });
         socket.connect();
 
@@ -62,14 +98,39 @@ function RoomDashboard() {
     };
     fetchRoomData();
 
-    const handleRoomClosed = () => {
-      showToast("This classroom has been closed. Redirecting...", "error");
-      setTimeout(() => navigate("/"), 2500);
+    // Teacher listeners
+    const handleStudentJoined = (student) => {
+      showToast(`Student joined: ${student.username}`, "info");
+      setRoom((prev) => {
+        if (!prev) return prev;
+        if (prev.participants.some(p => p._id === student._id)) return prev;
+        return { ...prev, participants: [...prev.participants, student] };
+      });
     };
 
+    const handleStudentLeft = (student) => {
+      showToast(`Student left: ${student.username}`, "error");
+      setRoom((prev) => prev ? ({
+        ...prev,
+        participants: prev.participants.filter(p => p._id !== student._id)
+      }) : null);
+    };
+
+    const handleRoomClosed = () => {
+      showToast("The host has closed the classroom. Exiting...", "error", 3000);
+      setTimeout(() => {
+        socket.disconnect();
+        navigate("/");
+      }, 3000);
+    };
+
+    socket.on("student-joined", handleStudentJoined);
+    socket.on("student-left", handleStudentLeft);
     socket.on("room-closed", handleRoomClosed);
 
     return () => {
+      socket.off("student-joined", handleStudentJoined);
+      socket.off("student-left", handleStudentLeft);
       socket.off("room-closed", handleRoomClosed);
       socket.disconnect();
     };
@@ -111,11 +172,17 @@ function RoomDashboard() {
         
         <div className="p-5 flex-1 flex flex-col gap-8">
           <div className="space-y-1.5">
-            <span className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-3 block">Problem Set</span>
-            <button onClick={() => navigate("/")} className="w-full text-left px-4 py-2.5 rounded-xl text-zinc-500 font-bold text-sm hover:bg-zinc-900 transition-all group flex justify-between items-center">
-              ‹ Global View
-            </button>
-            <div className="w-full px-4 py-2.5 rounded-xl bg-blue-500/10 
+            <span className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-3 block">Classroom Actions</span>
+            {isHost ? (
+              <button onClick={handleCloseRoom} className="w-full text-left px-4 py-2.5 rounded-xl text-red-500 font-bold text-sm hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20 group flex justify-between items-center">
+                ‹ Close Classroom
+              </button>
+            ) : (
+              <button onClick={handleExitRoom} className="w-full text-left px-4 py-2.5 rounded-xl text-zinc-500 font-bold text-sm hover:bg-zinc-900 transition-all border border-transparent hover:border-zinc-800 group flex justify-between items-center">
+                ‹ Exit Classroom
+              </button>
+            )}
+            <div className="w-full px-4 py-2.5 mt-2 rounded-xl bg-blue-500/10 
             text-blue-400 font-bold text-sm border border-blue-500/20 inner-glow">
               Classroom View
             </div>
