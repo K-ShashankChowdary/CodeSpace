@@ -1,7 +1,7 @@
 import React from "react";
 
 const STATUS_MAP = {
-  AC: { label: "Accepted", color: "text-green-500" },
+  AC: { label: "Accepted", color: "!text-green-500" },
   WA: { label: "Wrong Answer", color: "text-red-500" },
   TLE: { label: "Time Limit Exceeded", color: "text-yellow-500" },
   RE: { label: "Runtime Error", color: "text-red-500" },

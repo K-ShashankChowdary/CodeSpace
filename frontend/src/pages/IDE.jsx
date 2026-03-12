@@ -360,9 +360,9 @@ function IDE() {
 
     let outputColorClass = "text-zinc-300";
     if (status === "AC" || (typeof cleanedOutput === "string" && cleanedOutput.toLowerCase().includes("accepted"))) {
-      outputColorClass = "text-green-500 font-bold";
+      outputColorClass = "!text-green-500 font-bold";
     } else if (isError || (typeof cleanedOutput === "string" && (cleanedOutput.toLowerCase().includes("wrong answer") || cleanedOutput.toLowerCase().includes("time limit exceeded") || cleanedOutput.toLowerCase().includes("error")))) {
-      outputColorClass = "text-red-500 font-bold";
+      outputColorClass = "!text-red-500 font-bold";
     }
 
     return (
@@ -453,8 +453,8 @@ function IDE() {
                   <div className="flex justify-between items-start mb-4 relative z-10">
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg border ${
-                        statusState === "success" ? "bg-green-500/10 border-green-500/30 text-green-400" :
-                        statusState === "error" ? "bg-red-500/10 border-red-500/30 text-red-400" :
+                        statusState === "success" ? "bg-green-500/10 border-green-500/30 !text-green-500" :
+                        statusState === "error" ? "bg-red-500/10 border-red-500/30 !text-red-500" :
                         "bg-zinc-800 border-zinc-700 text-zinc-300"
                       }`}>
                         {username.charAt(0).toUpperCase()}
@@ -469,9 +469,9 @@ function IDE() {
                   <div className="mt-6 relative z-10">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 block">Live Status</span>
                     <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
-                      statusState === "success" ? "bg-green-500/10 border-green-500/20 text-green-400" :
-                      statusState === "error" ? "bg-red-500/10 border-red-500/20 text-red-400" :
-                      "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                      statusState === "success" ? "bg-green-500/10 border-green-500/20 !text-green-500" :
+                      statusState === "error" ? "bg-red-500/10 border-red-500/20 !text-red-500" :
+                      "bg-blue-500/10 border-blue-500/20 !text-blue-500"
                     }`}>
                       <div className={`w-2 h-2 rounded-full ${
                         statusState === "success" ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" :
@@ -548,10 +548,10 @@ function IDE() {
           <div className="flex items-center gap-3 bg-zinc-900/50 px-3 py-1.5 rounded-lg border border-zinc-800/60 shadow-inner">
             <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Status</span>
             <div className={`flex items-center gap-2 px-2.5 py-1 rounded border ${
-              status === "AC" ? "bg-green-500/10 border-green-500/20 text-green-400" :
+              status === "AC" ? "bg-green-500/10 border-green-500/20 !text-green-500" :
               status === "Idle" ? "bg-zinc-800 border-zinc-700 text-zinc-300" :
-              ["CE", "RE", "TLE", "WA"].includes(status) ? "bg-red-500/10 border-red-500/20 text-red-400" :
-              "bg-blue-500/10 border-blue-500/20 text-blue-400"
+              ["CE", "RE", "TLE", "WA"].includes(status) ? "bg-red-500/10 border-red-500/20 !text-red-500" :
+              "bg-blue-500/10 border-blue-500/20 !text-blue-500"
             }`}>
               <div className={`w-1.5 h-1.5 rounded-full ${
                 status === "AC" ? "bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.8)]" : 
