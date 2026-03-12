@@ -130,12 +130,16 @@ function IDE() {
     };
 
     const handleLeaderboardUpdate = (data) => {
+      console.log("[IDE Socket] Received leaderboard update:", data);
       if (data.problemId === id) {
         setLiveStatuses((prev) => ({ ...prev, [data.username]: data.status }));
+      } else {
+        console.warn("[IDE Socket] Ignored update for different problemId:", data.problemId, "Current:", id);
       }
     };
 
     // Attach listeners (Only happens if isHost is true)
+    console.log("[IDE Socket] Attaching teacher listeners for room:", roomCode);
     socket.on("student-joined", handleStudentJoined);
     socket.on("student-left", handleStudentLeft);
     socket.on("leaderboard-update", handleLeaderboardUpdate);
@@ -355,13 +359,10 @@ function IDE() {
     }
 
     let outputColorClass = "text-zinc-300";
-    if (typeof cleanedOutput === "string") {
-      const lowerOutput = cleanedOutput.toLowerCase();
-      if (lowerOutput.includes("accepted")) {
-        outputColorClass = "text-green-500 font-bold";
-      } else if (lowerOutput.includes("wrong answer") || lowerOutput.includes("time limit exceeded") || lowerOutput.includes("error")) {
-        outputColorClass = "text-red-500 font-bold";
-      }
+    if (status === "AC" || (typeof cleanedOutput === "string" && cleanedOutput.toLowerCase().includes("accepted"))) {
+      outputColorClass = "text-green-500 font-bold";
+    } else if (isError || (typeof cleanedOutput === "string" && (cleanedOutput.toLowerCase().includes("wrong answer") || cleanedOutput.toLowerCase().includes("time limit exceeded") || cleanedOutput.toLowerCase().includes("error")))) {
+      outputColorClass = "text-red-500 font-bold";
     }
 
     return (
@@ -429,8 +430,12 @@ function IDE() {
               const username = student?.username || "Unknown";
               const currentStatus = liveStatuses[username] || "In Progress";
               let statusState = "active"; // active, success, error
-              if (currentStatus === "AC") statusState = "success";
-              else if (currentStatus !== "In Progress") statusState = "error";
+              const lowerStatus = currentStatus.toLowerCase();
+              if (lowerStatus === "ac" || lowerStatus === "accepted") {
+                statusState = "success";
+              } else if (currentStatus !== "In Progress" && currentStatus !== "Pending" && currentStatus !== "Executing") {
+                statusState = "error";
+              }
 
               return (
                 <div key={`${student._id}-${currentStatus}`} className={`bg-[#0a0a0a] border rounded-2xl p-6 relative overflow-hidden transition-all duration-300 shadow-lg ${
