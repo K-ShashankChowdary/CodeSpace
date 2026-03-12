@@ -23,12 +23,12 @@ export const socket = io(SOCKET_URL, {
 // Diagnostic connection logging for Vercel/Render
 socket.on("connect", () => {
   console.log(`[Socket] Connected to ${SOCKET_URL} with ID: ${socket.id} via ${socket.io.engine.transport.name}`);
+  
+  socket.io.engine.on("upgrade", () => {
+    console.log(`[Socket] Transport upgraded to: ${socket.io.engine.transport.name}`);
+  });
 });
 
 socket.on("connect_error", (err) => {
   console.error(`[Socket] Connection Error:`, err.message);
-});
-
-socket.io.engine.on("upgrade", () => {
-  console.log(`[Socket] Transport upgraded to: ${socket.io.engine.transport.name}`);
 });
