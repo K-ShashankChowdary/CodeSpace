@@ -293,7 +293,7 @@ function IDE() {
       return (
         <div className="flex flex-col animate-in fade-in duration-300">
           <div className="mb-6 flex items-baseline gap-4">
-            <h2 className={`text-2xl font-bold ${overallStatus === "AC" ? "text-green-500" : "text-red-500"}`}>
+            <h2 className={`text-2xl tracking-tight font-bold ${overallStatus === "AC" ? "!text-green-500" : "!text-red-500"}`}>
               {getFullStatus(overallStatus)}
             </h2>
             {overallStatus === "AC" && activeRes?.time !== undefined && (
