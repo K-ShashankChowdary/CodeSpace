@@ -5,23 +5,21 @@ import CodeEditor from "../components/CodeEditor";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
-import { LogOut } from "lucide-react";
+import { LogOut, Play } from "lucide-react";
 import Toast from "../components/ui/Toast";
 import { socket } from "../utils/socket";
 
 function IDE() {
-  const { id } = useParams(); // problemId
+  const { id } = useParams();
   const [searchParams] = useSearchParams();
   const roomCode = searchParams.get("room");
   const navigate = useNavigate();
 
-  // Classroom State
   const [room, setRoom] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [isHost, setIsHost] = useState(false);
   const [liveStatuses, setLiveStatuses] = useState({}); 
 
-  // Problem & IDE State
   const [problem, setProblem] = useState(null);
   const [isFetchingProblem, setIsFetchingProblem] = useState(true);
   const [activeTab, setActiveTab] = useState("description");
@@ -29,24 +27,16 @@ function IDE() {
   const [history, setHistory] = useState([]);
   const [activeTestCase, setActiveTestCase] = useState(0);
 
-  const [code, setCode] = useState(
-    `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n \n \treturn 0;\n}`
-  );
-  
+  const [code, setCode] = useState(`#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n \n \treturn 0;\n}`);
   const [output, setOutput] = useState("");
   const [status, setStatus] = useState("Idle");
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Notification State
   const [toast, setToast] = useState(null); 
   const pollingIntervalRef = useRef(null);
 
-  const showToast = (message, type = "info") => {
-    setToast({ message, type });
-  };
+  const showToast = (message, type = "info") => setToast({ message, type });
 
-  // --- EFFECT 1: DATA FETCHING & HYDRATION ---
   useEffect(() => {
     if (!socket.connected) socket.connect();
 
@@ -56,7 +46,6 @@ function IDE() {
           api.get("/users/current-user"),
           api.get(`/problems/${id}`)
         ]);
-        
         const user = userRes.data.data;
         setCurrentUser(user);
         setProblem(probRes.data.data || null);
@@ -65,20 +54,12 @@ function IDE() {
           const roomRes = await api.get(`/rooms/details/${roomCode}`);
           const roomData = roomRes.data.data;
           setRoom(roomData);
+          setIsHost(roomData.host._id.toString() === user._id.toString());
 
-          const hostId = roomData.host._id.toString();
-          const currentUserId = user._id.toString();
-          const userIsHost = (hostId === currentUserId);
-          setIsHost(userIsHost);
-
-          // 🚀 PERSISTENCE LOGIC: Populate board from DB on load/refresh
           const initialStatuses = {};
           if (roomData.studentProgress && roomData.participants) {
             roomData.studentProgress.forEach((progress) => {
-              // Map studentId to username
-              const student = roomData.participants.find(p => 
-                (p._id?.toString() === progress.studentId?.toString())
-              );
+              const student = roomData.participants.find(p => (p._id.toString() === progress.studentId.toString()) || (p === progress.studentId));
               const statusForThisProblem = progress.results[id];
               if (student && student.username && statusForThisProblem) {
                 initialStatuses[student.username] = statusForThisProblem;
@@ -86,21 +67,10 @@ function IDE() {
             });
           }
           setLiveStatuses(initialStatuses);
-
-          const emitJoinRoom = () => {
-            socket.emit("join-room", { roomCode, username: user.username, userId: user._id, isHost: userIsHost });
-          };
-          socket.on("connect", emitJoinRoom);
-          if (socket.connected) emitJoinRoom();
+          socket.emit("join-room", { roomCode });
         }
-      } catch (error) {
-        console.error("Load Error:", error);
-        navigate("/");
-      } finally {
-        setIsFetchingProblem(false);
-      }
+      } catch (error) { navigate("/"); } finally { setIsFetchingProblem(false); }
     };
-
     fetchWorkspaceData();
     return () => {
       socket.off("connect"); 
@@ -108,7 +78,6 @@ function IDE() {
     };
   }, [id, roomCode, navigate]);
 
-  // --- EFFECT 2: TEACHER-ONLY LISTENERS ---
   useEffect(() => {
     if (!roomCode || !isHost) return;
 
@@ -124,7 +93,6 @@ function IDE() {
     const handleUpdate = (data) => {
       if (data.problemId === id) {
         setLiveStatuses((prev) => {
-          // 🚀 ANTIGRAVITY: If current UI is already AC, ignore any updates
           if (prev[data.username] === "AC") return prev;
           return { ...prev, [data.username]: data.status };
         });
@@ -134,19 +102,25 @@ function IDE() {
     const handleStudentJoined = (student) => {
       setRoom((prev) => {
         if (!prev) return prev;
-        // 🚀 TOAST FILTER: Don't notify if they are already in the list
         const exists = prev.participants?.some(p => p._id.toString() === student._id.toString());
         if (!exists) {
           showToast(`Student joined: ${student.username}`, "info");
-          return { ...prev, participants: [...prev.participants, student] };
+          return { ...prev, participants: [...(prev.participants || []), student] };
         }
         return prev;
       });
     };
 
+    // 🚨 STUDENT LEFT LISTENER
     const handleStudentLeft = (student) => {
       showToast(`Student left: ${student.username}`, "error");
-      setRoom((prev) => prev ? ({ ...prev, participants: prev.participants.filter(p => p._id !== student._id) }) : null);
+      setRoom((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          participants: prev.participants.filter(p => p._id.toString() !== student._id.toString())
+        };
+      });
     };
 
     socket.on("sync-entire-leaderboard", handleFullSync);
@@ -162,18 +136,16 @@ function IDE() {
     };
   }, [isHost, roomCode, id, room]);
 
-  // --- EFFECT 3: STUDENT LISTENERS ---
   useEffect(() => {
     if (isHost || !roomCode) return;
     const handleRoomClosed = () => {
-      showToast("Classroom closed by host. Exiting...", "error", 3000);
+      showToast("The host has closed the classroom. Exiting...", "error", 3000);
       setTimeout(() => navigate("/"), 3000);
     };
     socket.on("room-closed", handleRoomClosed);
     return () => socket.off("room-closed", handleRoomClosed);
   }, [isHost, roomCode, navigate]);
 
-  // UI Support Logic
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   useEffect(() => { if (activeTab === "submissions") fetchHistory(); }, [activeTab]);
 
@@ -185,31 +157,20 @@ function IDE() {
   };
 
   const handleLogout = async () => {
-    try {
-      if (socket.connected) socket.disconnect();
-      localStorage.removeItem("accessToken");
-      await api.post("/users/logout");
-      window.location.href = "/auth";
-    } catch (error) { console.error(error); }
-  };
-
-  const handleCloseRoom = async () => {
-    if (!roomCode) return navigate("/");
-    showToast("Closing classroom...", "error", 2000);
-    socket.emit("host-closed-room", roomCode);
-    try { await api.post(`/rooms/close/${roomCode}`); } 
-    finally { setTimeout(() => navigate("/"), 2000); }
+    if (socket.connected) socket.disconnect();
+    localStorage.removeItem("accessToken");
+    await api.post("/users/logout");
+    window.location.href = "/auth";
   };
 
   const handleExecution = async (type) => {
     if (!code.trim()) return;
     type === "run" ? setIsRunning(true) : setIsSubmitting(true);
     setStatus("Queued"); setOutput("Processing...");
-    setActiveTab("description"); setActiveTestCase(0);
     try {
       const response = await api.post("/submissions/submit", { problemId: id, language: "cpp", code, executionType: type });
       pollJobStatus(response.data.data.jobId, type);
-    } catch (error) { setStatus("Error"); setIsRunning(false); setIsSubmitting(false); }
+    } catch (error) { setIsRunning(false); setIsSubmitting(false); }
   };
 
   const pollJobStatus = (jobId, type) => {
@@ -230,26 +191,25 @@ function IDE() {
     }, 1500);
   };
 
-  const handleRestoreCode = (submissionCode) => { if (submissionCode) { setCode(submissionCode); setActiveTab("description"); } };
-
   const renderConsoleContent = () => {
     if (!output) return <p className="text-sm font-mono text-zinc-500 italic mt-2">Run code to see output...</p>;
     return <div className="text-zinc-300 font-mono text-sm whitespace-pre-wrap">{typeof output === 'string' ? output : JSON.stringify(output)}</div>;
   };
 
-  if (isFetchingProblem) return <div className="h-screen w-screen bg-[#0a0a0a] flex flex-col items-center justify-center"><Spinner size="sm" label="Syncing Leaderboard..." /></div>;
+  const handleRestoreCode = (submissionCode) => { if (submissionCode) { setCode(submissionCode); setActiveTab("description"); } };
+
+  if (isFetchingProblem) return <div className="h-screen bg-[#0a0a0a] flex items-center justify-center"><Spinner size="sm" label="Syncing Leaderboard..." /></div>;
 
   return (
     <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
       {isHost ? (
-        /* TEACHER VIEW (Your exact styles) */
         <div className="min-h-screen bg-[#050505] text-white p-8 font-sans relative">
           <header className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-6">
             <div className="flex items-center gap-6">
               <button onClick={() => navigate(`/room/${roomCode}`)} className="flex items-center gap-2 group text-zinc-500 hover:text-white transition-colors">
-                <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 transition-all">
+                <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 group-hover:border-blue-500/50 transition-all">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
                 </div>
                 <span className="text-[10px] font-bold uppercase tracking-widest">Return to Room</span>
@@ -286,7 +246,7 @@ function IDE() {
           </div>
         </div>
       ) : (
-        /* STUDENT VIEW (Your exact styles) */
+        /* STUDENT VIEW (Restored full layout) */
         <div className="flex-1 flex flex-col overflow-hidden">
           <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
             <div className="flex items-center gap-6">
