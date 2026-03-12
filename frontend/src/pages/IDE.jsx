@@ -355,8 +355,18 @@ function IDE() {
       cleanedOutput = JSON.stringify(output, null, 2);
     }
 
+    let outputColorClass = "text-zinc-300";
+    if (typeof cleanedOutput === "string") {
+      const lowerOutput = cleanedOutput.toLowerCase();
+      if (lowerOutput.includes("accepted")) {
+        outputColorClass = "text-green-500 font-bold";
+      } else if (lowerOutput.includes("wrong answer") || lowerOutput.includes("time limit exceeded") || lowerOutput.includes("error")) {
+        outputColorClass = "text-red-500 font-bold";
+      }
+    }
+
     return (
-      <div className={`p-6 rounded-xl border text-sm leading-relaxed font-mono whitespace-pre-wrap ${isError ? "bg-red-500/5 text-red-400 border-red-500/20 shadow-inner" : "text-zinc-300 border-zinc-800"}`}>
+      <div className={`p-6 rounded-xl border text-sm leading-relaxed font-mono whitespace-pre-wrap ${isError ? "bg-red-500/5 border-red-500/20 shadow-inner" : "border-zinc-800"} ${outputColorClass}`}>
         {status === "CE" && <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">Compilation Error</div>}
         {status === "RE" && <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">Runtime Error</div>}
         {cleanedOutput}
