@@ -16,8 +16,6 @@ const SOCKET_URL = getSocketUrl();
 export const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: true,
-  // Force WebSocket first, fallback to polling only if necessary
-  transports: ["websocket", "polling"],
 });
 
 // Diagnostic connection logging for Vercel/Render
