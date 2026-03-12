@@ -102,7 +102,6 @@ function IDE() {
       socket.off("student-left");
       socket.off("leaderboard-update");
       socket.off("room-closed");
-      if (roomCode) socket.disconnect();
       if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
     };
   }, [id, roomCode, navigate]);
@@ -147,7 +146,7 @@ function IDE() {
       socket.off("student-left", handleStudentLeft);
       socket.off("leaderboard-update", handleLeaderboardUpdate);
     };
-  }, [isHost, roomCode]);
+  }, [isHost, roomCode, id]);
 
   // --- EFFECT 3: STUDENT-ONLY LISTENERS ---
   useEffect(() => {

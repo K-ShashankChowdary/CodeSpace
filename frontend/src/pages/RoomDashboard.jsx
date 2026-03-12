@@ -132,7 +132,6 @@ function RoomDashboard() {
       socket.off("student-joined", handleStudentJoined);
       socket.off("student-left", handleStudentLeft);
       socket.off("room-closed", handleRoomClosed);
-      socket.disconnect();
     };
   }, [roomCode, navigate]);
 
