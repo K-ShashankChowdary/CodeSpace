@@ -26,7 +26,9 @@ api.interceptors.response.use(
                 return api(originalRequest);
             } catch (refreshError) {
                 console.error("Session expired. Please log in again.");
-                window.location.href = '/auth';
+                if (window.location.pathname !== '/auth') {
+                    window.location.href = '/auth';
+                }
                 return Promise.reject(refreshError);
             }
         }
