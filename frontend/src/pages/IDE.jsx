@@ -432,7 +432,7 @@ function IDE() {
               else if (currentStatus !== "In Progress") statusState = "error";
 
               return (
-                <div key={student._id} className={`bg-[#0a0a0a] border rounded-2xl p-6 relative overflow-hidden transition-all duration-300 shadow-lg ${
+                <div key={`${student._id}-${currentStatus}`} className={`bg-[#0a0a0a] border rounded-2xl p-6 relative overflow-hidden transition-all duration-300 shadow-lg ${
                   statusState === "success" ? "border-green-500/30 hover:border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]" :
                   statusState === "error" ? "border-red-500/30 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]" :
                   "border-zinc-800/80 hover:border-blue-500/30"
