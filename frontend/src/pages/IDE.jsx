@@ -8,7 +8,19 @@ import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
 
 
-const SOCKET_URL = "https://codespace-api.duckdns.org"; 
+// Fallback to exactly the URL the user deployed with, or dynamic if env is properly configured.
+// Assuming VITE_API_URL is typically 'https://api.yourdomain.com/api/v1', we extract the base origin.
+const getSocketUrl = () => {
+  const apiUrl = import.meta.env.VITE_API_URL || "https://codespace-api.duckdns.org/api/v1";
+  try {
+    const url = new URL(apiUrl);
+    return `${url.protocol}//${url.host}`;
+  } catch (e) {
+    return "https://codespace-api.duckdns.org";
+  }
+};
+
+const SOCKET_URL = getSocketUrl(); 
 
 const socket = io(SOCKET_URL, {
   withCredentials: true,
@@ -133,7 +145,9 @@ function IDE() {
     };
 
     const handleLeaderboardUpdate = (data) => {
-      setLiveStatuses((prev) => ({ ...prev, [data.username]: data.status }));
+      if (data.problemId === id) {
+        setLiveStatuses((prev) => ({ ...prev, [data.username]: data.status }));
+      }
     };
 
     // Attach listeners (Only happens if isHost is true)
@@ -251,6 +265,7 @@ function IDE() {
               roomCode,
               username: currentUser.username,
               status: jobData.status,
+              problemId: id,
             });
           }
         }
@@ -398,43 +413,68 @@ function IDE() {
           </Button>
         </header>
 
-        <div className="bg-[#0d0d0d] rounded-xl border border-zinc-800 overflow-hidden shadow-2xl">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#141414] border-b border-zinc-800 text-[10px] uppercase tracking-widest text-zinc-500">
-                <th className="p-4 font-bold">Student Name</th>
-                <th className="p-4 font-bold">Live Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {room?.participants
-                .filter((p) => p._id.toString() !== currentUser._id.toString())
-                .map((student) => {
-                  const currentStatus = liveStatuses[student.username] || "In Progress";
-                  let badgeColor = "bg-zinc-800 text-zinc-400 border-zinc-700";
-                  if (currentStatus === "AC") badgeColor = "bg-green-500/10 text-green-500 border-green-500/20";
-                  else if (currentStatus !== "In Progress") badgeColor = "bg-red-500/10 text-red-500 border-red-500/20";
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {room?.participants
+            .filter((p) => p._id.toString() !== currentUser._id.toString())
+            .map((student) => {
+              const currentStatus = liveStatuses[student.username] || "In Progress";
+              let statusState = "active"; // active, success, error
+              if (currentStatus === "AC") statusState = "success";
+              else if (currentStatus !== "In Progress") statusState = "error";
 
-                  return (
-                    <tr key={student._id} className="border-b border-zinc-800/50 hover:bg-zinc-900/30 transition-colors">
-                      <td className="p-4 text-sm font-medium">{student.username}</td>
-                      <td className="p-4">
-                        <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${badgeColor}`}>
-                          {getFullStatus(currentStatus)}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              {(!room?.participants || room.participants.length <= 1) && (
-                <tr>
-                  <td colSpan="2" className="p-12 text-center text-zinc-500 italic">
-                    <Spinner size="sm" label="Waiting for students to join..." />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              return (
+                <div key={student._id} className={`bg-[#0a0a0a] border rounded-2xl p-6 relative overflow-hidden transition-all duration-300 shadow-lg ${
+                  statusState === "success" ? "border-green-500/30 hover:border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]" :
+                  statusState === "error" ? "border-red-500/30 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]" :
+                  "border-zinc-800/80 hover:border-blue-500/30"
+                }`}>
+                  {/* Background glow based on status */}
+                  <div className={`absolute -top-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-20 pointer-events-none transition-colors duration-1000 ${
+                    statusState === "success" ? "bg-green-500" :
+                    statusState === "error" ? "bg-red-500" :
+                    "bg-blue-500"
+                  }`}></div>
+
+                  <div className="flex justify-between items-start mb-4 relative z-10">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg border ${
+                        statusState === "success" ? "bg-green-500/10 border-green-500/30 text-green-400" :
+                        statusState === "error" ? "bg-red-500/10 border-red-500/30 text-red-400" :
+                        "bg-zinc-800 border-zinc-700 text-zinc-300"
+                      }`}>
+                        {student.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <h3 className="text-zinc-100 font-bold truncate max-w-[120px]" title={student.username}>{student.username}</h3>
+                        <p className="text-zinc-500 text-xs font-mono">User</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 relative z-10">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 block">Live Status</span>
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                      statusState === "success" ? "bg-green-500/10 border-green-500/20 text-green-400" :
+                      statusState === "error" ? "bg-red-500/10 border-red-500/20 text-red-400" :
+                      "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                    }`}>
+                      <div className={`w-2 h-2 rounded-full ${
+                        statusState === "success" ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" :
+                        statusState === "error" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" :
+                        "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-pulse"
+                      }`}></div>
+                      <span className="text-xs font-bold tracking-wide">{getFullStatus(currentStatus)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          {(!room?.participants || room.participants.length <= 1) && (
+            <div className="col-span-full py-20 flex flex-col items-center justify-center border border-zinc-800/50 rounded-2xl bg-[#0a0a0a] border-dashed">
+              <Spinner size="md" />
+              <p className="text-zinc-500 mt-4 text-sm font-medium">Waiting for students to join...</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -457,31 +497,50 @@ function IDE() {
       )}
       <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
         <div className="flex items-center gap-6">
-          <button onClick={() => {
-            if (roomCode) {
-              showToast("exiting room...", "info", 1500);
-              socket.emit("leave-room", roomCode);
-              setTimeout(() => navigate("/"), 1500);
-              return;
-            }
-            navigate("/");
-          }} className="text-zinc-500 hover:text-white transition-colors text-[11px] font-bold uppercase tracking-widest">
-            ‹ Dashboard
+          <button 
+            onClick={() => {
+              if (roomCode) { navigate(`/room/${roomCode}`); return; }
+              navigate("/");
+            }} 
+            className="flex items-center gap-2 group text-zinc-500 hover:text-white transition-colors"
+          >
+            <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 group-hover:border-zinc-700 transition-all">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+              </svg>
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-widest">{roomCode ? "Return to Room" : "Dashboard"}</span>
           </button>
           <div className="h-4 w-px bg-zinc-800"></div>
-          <h1 className="text-sm font-bold text-zinc-100 flex items-center gap-4">
-            {problem?.title || "Problem"}
-            {roomCode && (
-              <span className="bg-blue-500/10 text-blue-400 text-[9px] px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-widest">
-                Classroom: {roomCode}
-              </span>
-            )}
-          </h1>
+          <div className="flex items-center gap-3">
+            <img src="/fevicon.svg" alt="CodeSpace" className="w-6 h-6 opacity-80" />
+            <h1 className="text-sm font-bold text-zinc-100 flex items-center gap-4">
+              {problem?.title || "Problem"}
+              {roomCode && (
+                <span className="bg-blue-500/10 text-blue-400 text-[9px] px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-widest font-mono">
+                  Room: {roomCode}
+                </span>
+              )}
+            </h1>
+          </div>
         </div>
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${status === "AC" ? "bg-green-500" : status === "Idle" ? "bg-zinc-600" : "bg-yellow-500 animate-pulse"}`}></div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{getFullStatus(status)}</span>
+          <div className="flex items-center gap-3 bg-zinc-900/50 px-3 py-1.5 rounded-lg border border-zinc-800/60 shadow-inner">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Status</span>
+            <div className={`flex items-center gap-2 px-2.5 py-1 rounded border ${
+              status === "AC" ? "bg-green-500/10 border-green-500/20 text-green-400" :
+              status === "Idle" ? "bg-zinc-800 border-zinc-700 text-zinc-300" :
+              ["CE", "RE", "TLE", "WA"].includes(status) ? "bg-red-500/10 border-red-500/20 text-red-400" :
+              "bg-blue-500/10 border-blue-500/20 text-blue-400"
+            }`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                status === "AC" ? "bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.8)]" : 
+                status === "Idle" ? "bg-zinc-500" : 
+                ["CE", "RE", "TLE", "WA"].includes(status) ? "bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]" :
+                "bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.8)] animate-pulse"
+              }`}></div>
+              <span className="text-[10px] font-bold uppercase tracking-widest">{getFullStatus(status)}</span>
+            </div>
           </div>
           {roomCode && !isHost && (
             <Button variant="secondary" size="sm" onClick={() => {
@@ -492,7 +551,7 @@ function IDE() {
               Exit Classroom
             </Button>
           )}
-          <Button variant="danger" size="sm" onClick={handleLogout}>
+          <Button variant="ghost" size="sm" onClick={handleLogout} className="text-zinc-400 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 transition-colors">
             Logout
           </Button>
         </div>

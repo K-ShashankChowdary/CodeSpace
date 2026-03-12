@@ -15,11 +15,12 @@ const roomSchema = new Schema(
             ref: "User",        // the teacher who created this room
             required: true
         },
-        problemId: {
-            type: Schema.Types.ObjectId,
-            ref: "Problem",     // the problem assigned to this classroom session
-            required: true
-        },
+        problems: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: "Problem"
+            }
+        ],
         participants: [
             {
                 type: Schema.Types.ObjectId,

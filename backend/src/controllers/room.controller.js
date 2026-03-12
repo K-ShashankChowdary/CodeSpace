@@ -5,10 +5,10 @@ import { Room } from "../models/room.model.js";
 import crypto from "crypto";
 
 const createRoom = asyncHandler(async (req, res) => {
-    const { problemId } = req.body;
+    const { problems } = req.body;
 
-    if (!problemId) {
-        throw new ApiError(400, "Problem selection is mandatory to start a room");
+    if (!problems || !Array.isArray(problems) || problems.length === 0) {
+        throw new ApiError(400, "At least one problem must be selected to start a room");
     }
 
     let roomCode;
@@ -23,7 +23,7 @@ const createRoom = asyncHandler(async (req, res) => {
     room = await Room.create({
         roomCode,
         host: req.user._id,
-        problemId,
+        problems,
         participants: [req.user._id]  
     });
 
@@ -74,7 +74,8 @@ const getRoomDetails = asyncHandler(async (req, res) => {
 
     const room = await Room.findOne({ roomCode: roomCode.toUpperCase(), isActive: true })
         .populate("host", "username email")
-        .populate("participants", "username email");
+        .populate("participants", "username email")
+        .populate("problems", "title difficulty");
 
     if (!room) {
         throw new ApiError(404, "Room not found or inactive");

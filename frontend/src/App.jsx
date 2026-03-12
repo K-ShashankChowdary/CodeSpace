@@ -4,6 +4,7 @@ import api from "./services/api";
 import Auth from "./pages/Auth";
 import IDE from "./pages/IDE";
 import Dashboard from "./pages/Dashboard";
+import RoomDashboard from "./pages/RoomDashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Spinner from "./components/ui/Spinner";
 
@@ -38,6 +39,7 @@ function App() {
     <ErrorBoundary>
       <Routes>
         <Route path="/" element={isAuthenticated ? <Dashboard /> : <Navigate to="/auth" />} />
+        <Route path="/room/:roomCode" element={isAuthenticated ? <RoomDashboard /> : <Navigate to="/auth" />} />
         <Route path="/problem/:id" element={isAuthenticated ? <IDE /> : <Navigate to="/auth" />} />
         <Route path="/auth" element={!isAuthenticated ? <Auth /> : <Navigate to="/" />} />
         <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/auth"} />} />

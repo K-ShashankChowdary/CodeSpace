@@ -63,8 +63,8 @@ export const initializeSockets = (httpServer) => {
 
         socket.on("student-submission", (data) => {
             const roomCode = String(data.roomCode).trim();
-            const { username, status } = data;
-            socket.to(roomCode).emit("leaderboard-update", { username, status });
+            const { username, status, problemId } = data;
+            socket.to(roomCode).emit("leaderboard-update", { username, status, problemId });
         });
 
         socket.on("leave-room", async (rawRoomCode) => {
