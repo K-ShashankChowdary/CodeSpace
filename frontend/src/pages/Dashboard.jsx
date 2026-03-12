@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
+import { socket } from "../utils/socket";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import Input from "../components/ui/Input";
@@ -29,6 +30,13 @@ function Dashboard() {
   };
 
   const navigate = useNavigate();
+
+  // 🚨 Connect socket when arriving at the dashboard
+  useEffect(() => {
+    if (!socket.connected) {
+      socket.connect();
+    }
+  }, []);
 
   useEffect(() => {
     const fetchProblems = async () => {
@@ -78,6 +86,12 @@ function Dashboard() {
 
   const handleLogout = async () => {
     try {
+      if (socket.connected) {
+        socket.disconnect();
+      }
+      // 🚨 CRITICAL: Clear the token so the socket doesn't auto-connect on the login page
+      localStorage.removeItem("accessToken");
+      
       await api.post("/users/logout");
       window.location.href = "/auth";
     } catch (error) {
