@@ -19,10 +19,10 @@ export const initializeSockets = (httpServer) => {
     // Authentication Middleware
     io.use((socket, next) => {
         try {
-            // 1. Check Auth Payload (LocalStorage Token)
+            // 1. Check Auth Payload (LocalStorage Token from frontend)
             let token = socket.handshake.auth?.token;
 
-            // 2. Fallback to Cookies
+            // 2. Fallback to Cookies for standard browsers
             if (!token && socket.handshake.headers.cookie) {
                 const cookies = Object.fromEntries(
                     socket.handshake.headers.cookie.split(';').map(c => c.trim().split('='))
@@ -66,6 +66,7 @@ export const initializeSockets = (httpServer) => {
 
                 console.log(`👤 User ${username} joined room: ${roomCode}`);
                 
+                // Only notify other room members (the teacher) if a student joins
                 if (userId && !isHost) {
                     socket.to(roomCode).emit("student-joined", { _id: userId, username });
                     await Room.updateOne(
@@ -78,20 +79,62 @@ export const initializeSockets = (httpServer) => {
             }
         });
 
-        socket.on("student-submission", (data) => {
-            const roomCode = String(data.roomCode).trim();
-            const { username, status, problemId } = data;
-            socket.to(roomCode).emit("leaderboard-update", { username, status, problemId });
+        socket.on("student-submission", async (data) => {
+            const { roomCode, status, problemId, username } = data;
+            
+            try {
+                const room = await Room.findOne({ roomCode, isActive: true });
+                if (!room) return;
+
+                // Find or create the student's progress entry in the DB
+                let progress = room.studentProgress.find(
+                    p => p.studentId.toString() === socket.data.userId.toString()
+                );
+
+                if (!progress) {
+                    progress = { studentId: socket.data.userId, results: new Map() };
+                    room.studentProgress.push(progress);
+                }
+
+                // Get the current best status for this specific problem
+                const currentBest = progress.results instanceof Map 
+                    ? progress.results.get(problemId) 
+                    : progress.results[problemId];
+
+                // 🚨 AC-LOCK LOGIC:
+                // If the student already has "AC", we do NOT overwrite it with a worse status.
+                if (currentBest !== "AC") {
+                    if (progress.results instanceof Map) {
+                        progress.results.set(problemId, status);
+                    } else {
+                        progress.results[problemId] = status;
+                    }
+                    
+                    room.markModified('studentProgress');
+                    await room.save();
+                    
+                    // Broadcast the NEW status to the teacher
+                    io.to(roomCode).emit("leaderboard-update", { username, problemId, status });
+                } else {
+                    // If they already solved it, tell the teacher UI to keep showing "AC"
+                    io.to(roomCode).emit("leaderboard-update", { username, problemId, status: "AC" });
+                }
+            } catch (error) {
+                console.error("Submission Sync Error:", error);
+            }
         });
 
         socket.on("host-closed-room", async (rawRoomCode) => {
             const roomCode = String(rawRoomCode).trim();
+            console.log(`⚠️ Host closed room: ${roomCode}`);
             socket.to(roomCode).emit("room-closed");
         });
 
         socket.on("disconnect", async () => {
             console.log(`🔴 Socket disconnected: ${socket.id}`);
             const { roomCode, userId, isHost } = socket.data;
+            
+            // If the host disconnects, close the room for everyone
             if (roomCode && userId && isHost) {
                 socket.to(roomCode).emit("room-closed");
                 await Room.updateOne({ roomCode, isActive: true }, { isActive: false });
