@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
         // 3. Capture the exit code.
         // 4. Record end time and calculate execution duration in milliseconds.
         // 5. Save the duration to a text file for accurate internal timing.
-        string dockerRunCmd = "start=$(date +%s%N); ./" + exeName;
+        string dockerRunCmd = "{ start=$(date +%s%N); ./" + exeName;
         if (fs::exists(inputPath)) {
             dockerRunCmd += " < " + jobId + ".txt";
         }
@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
                      "--network none --memory=\"" + MEM_LIMIT + "\" " +
                      "--memory-swap=\"" + MEM_LIMIT + "\" --pids-limit=" + PID_LIMIT + 
                      " -w /app " + IMAGE + " /bin/sh -c '" + 
-                     "g++ -w -std=c++17 -O2" + jobId + ".cpp -o " + exeName + " && " + dockerRunCmd + "' 2>&1";
+                     "g++ -w -std=c++17 -O2 " + jobId + ".cpp -o " + exeName + " && " + dockerRunCmd + "' 2>&1";
 
         auto start = high_resolution_clock::now();
         current_pipe = popen(cmd.c_str(), "r");
