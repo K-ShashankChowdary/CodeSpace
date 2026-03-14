@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
                      "--network none --memory=\"" + MEM_LIMIT + "\" " +
                      "--memory-swap=\"" + MEM_LIMIT + "\" --pids-limit=" + PID_LIMIT + 
                      " -w /app " + IMAGE + " /bin/sh -c '" + 
-                     "g++ -O2 " + jobId + ".cpp -o " + exeName + " && " + dockerRunCmd + "' 2>&1";
+                     "g++ -w -std=c++17 -O2" + jobId + ".cpp -o " + exeName + " && " + dockerRunCmd + "' 2>&1";
 
         auto start = high_resolution_clock::now();
         current_pipe = popen(cmd.c_str(), "r");
