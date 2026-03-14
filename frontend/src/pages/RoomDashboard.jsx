@@ -131,6 +131,16 @@ function RoomDashboard() {
         }
       };
 
+      // Add this RIGHT BEFORE your socket.on() calls in the useEffect
+      socket.off("leaderboard-update");
+      socket.off("student-joined");
+      socket.off("student-left");
+
+      // Then attach them normally
+      socket.on("leaderboard-update", handleLeaderboardUpdate);
+      socket.on("student-joined", handleStudentJoined);
+      socket.on("student-left", handleStudentLeft);
+
       socket.on("leaderboard-update", handleGlobalLeaderboardUpdate);
 
       return () => {
