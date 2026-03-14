@@ -26,22 +26,27 @@ export const initializeSockets = (httpServer) => {
     });
 
     io.on("connection", (socket) => {
+       // backend/src/sockets/socket.js
+
         socket.on("join-room", async (data) => {
             const { roomCode } = data;
             socket.join(roomCode);
             
-            // Store critical info in socket data for the disconnect event
             socket.data.roomCode = roomCode;
             
-            const room = await Room.findOne({ roomCode, isActive: true });
+            // 🚨 FIX 1: Populate the studentId so we have the username for the UI
+            const room = await Room.findOne({ roomCode, isActive: true })
+                .populate("studentProgress.studentId", "username");
+
             if (!room) return;
 
             const isHost = room.host.toString() === socket.data.userId.toString();
             socket.data.isHost = isHost;
 
             if (isHost) {
+                // 🚨 FIX 2: Map the populated username instead of the raw ObjectId
                 const allProgress = room.studentProgress.map(p => ({
-                    studentId: p.studentId,
+                    username: p.studentId?.username, 
                     results: Object.fromEntries(p.results) 
                 }));
                 socket.emit("sync-entire-leaderboard", allProgress);
