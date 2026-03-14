@@ -368,11 +368,19 @@ function RoomDashboard() {
                       </span>
                     </div>
 
-                    <div className="col-span-3 hidden sm:flex items-center justify-end pr-6 relative z-10">
-                      <div className="flex items-center gap-2 px-5 py-2 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-500 font-black text-[10px] uppercase tracking-widest group-hover:bg-blue-600 group-hover:text-white transition-all transform group-hover:scale-105">
-                        <span>Solve</span>
+                    <div
+                      className={`flex items-center gap-2 px-5 py-2 rounded-full border font-black text-[10px] uppercase tracking-widest transition-all transform group-hover:scale-105 ${
+                        isHost
+                          ? "bg-blue-500/10 border-blue-500/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white"
+                          : "bg-zinc-900 border-zinc-800 text-zinc-500 group-hover:bg-green-600 group-hover:text-white"
+                      }`}
+                    >
+                      <span>{isHost ? "View Progress" : "Solve"}</span>
+                      {isHost ? (
+                        <Users className="w-3.5 h-3.5" />
+                      ) : (
                         <Play className="w-3.5 h-3.5 fill-current" />
-                      </div>
+                      )}
                     </div>
                   </div>
                 ))

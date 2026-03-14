@@ -156,7 +156,7 @@ function IDE() {
         if (data.status === "AC") {
           showToast(`🔥 ${data.username} solved a problem! (AC)`, "success");
         } else {
-          showToast(`📝 ${data.username} submitted: ${data.status}`, "error");
+          showToast(`${data.username} submitted: ${data.status}`, "error");
         }
       }
 
