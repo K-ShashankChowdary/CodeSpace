@@ -165,6 +165,11 @@ function IDE() {
         setLiveStatuses((prev) => ({ ...prev, [data.username]: data.status }));
       }
     };
+    socket.off("sync-entire-leaderboard");
+    socket.off("leaderboard-update");
+    socket.off("student-joined");
+    socket.off("student-left");
+
     socket.on("sync-entire-leaderboard", handleSyncLeaderboard);
     socket.on("leaderboard-update", handleLeaderboardUpdate);
     socket.on("student-joined", handleStudentJoined);
