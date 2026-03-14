@@ -319,6 +319,19 @@ function RoomDashboard() {
               Session Workspace
             </h2>
           </div>
+          {isHost && (
+            <div className="flex items-center gap-3 px-5 py-2.5 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 backdrop-blur-xl">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
+                  Students Connected
+                </span>
+              </div>
+              <span className="text-lg font-black text-white px-2 border-l border-zinc-800/80 ml-2">
+                {room.participants?.length || 0}
+              </span>
+            </div>
+          )}
         </header>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-12">
@@ -369,20 +382,23 @@ function RoomDashboard() {
                     </div>
 
                     <div
-                      className={`flex items-center justify-center gap-2 px-5 py-2 rounded-full border font-black text-[10px] uppercase tracking-widest transition-all transform group-hover:scale-105 ${
-                        isHost
-                          ? "bg-blue-500/10 border-blue-500/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white"
-                          : "bg-zinc-900 border-zinc-800 text-zinc-500 group-hover:bg-green-600 group-hover:text-white"
-                      }`}
+                      className={`col-span-3 hidden sm:flex items-center justify-center relative z-10`}
                     >
-                      {/* Wrap text and icon in a flex container to prevent overlap */}
-                      <div className="flex items-center gap-2 pointer-events-none">
-                        <span>{isHost ? "View Progress" : "Solve"}</span>
-                        {isHost ? (
-                          <Users className="w-3.5 h-3.5 shrink-0" /> // Fixed: width 3.5 and shrink-0
-                        ) : (
-                          <Play className="w-3.5 h-3.5 fill-current shrink-0" />
-                        )}
+                      <div
+                        className={`flex items-center justify-center gap-2 px-5 py-2 rounded-full border font-black text-[10px] uppercase tracking-widest transition-all transform group-hover:scale-105 ${
+                          isHost
+                            ? "bg-blue-500/10 border-blue-500/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white"
+                            : "bg-zinc-900 border-zinc-800 text-zinc-500 group-hover:bg-green-600 group-hover:text-white"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 pointer-events-none">
+                          <span>{isHost ? "View Progress" : "Solve"}</span>
+                          {isHost ? (
+                            <Users className="w-3.5 h-3.5 shrink-0" />
+                          ) : (
+                            <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
