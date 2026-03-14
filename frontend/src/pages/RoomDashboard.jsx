@@ -328,7 +328,7 @@ function RoomDashboard() {
                 </span>
               </div>
               <span className="text-lg font-black text-white px-2 border-l border-zinc-800/80 ml-2">
-                {room.participants?.length || 0}
+                {room.participants?.filter((p) => p._id !== room.host?._id).length || 0}
               </span>
             </div>
           )}
