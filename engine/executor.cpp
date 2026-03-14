@@ -8,31 +8,31 @@
 #include <csignal>
 #include <vector>
 
-// Reference: https://medium.com/@blogs4devs/implementing-a-remote-code-execution-engine-from-scratch-4a765a3c7303
 namespace fs = std::filesystem;
 using namespace std;
 using namespace std::chrono;
 
-// Docker container resource limits
-const string IMAGE = "cpp-runner";       // pre-built Docker image with g++
-const int MAX_OUTPUT_SIZE = 10000;       // caps stdout buffer to 10KB to prevent memory bombs
-const string MEM_LIMIT = "256m";         // limits container memory to 256MB, triggers OOM kill on overflow
-const string CPU_LIMIT = "0.5";          // limits container to half a CPU core
-const string PID_LIMIT = "64";           // blocks fork bombs by capping process count
-const string TIME_LIMIT = "10s";          // max wall-clock time before gtimeout kills the process
-const int THRESHOLD_MS = 9500;           // if killed before 3.5s = MLE, after = TLE
+// --- Configuration & Security Limits ---
+const string IMAGE = "cpp-runner";       // Docker image containing g++
+const int MAX_OUTPUT_SIZE = 10000;       // Max bytes to read from stdout/stderr (10KB limit to prevent buffer overflow)
+const string MEM_LIMIT = "256m";         // Strict 256MB RAM cap
+const string CPU_LIMIT = "0.5";          // Throttle to 50% of a CPU core
+const string PID_LIMIT = "64";           // Prevent fork bombs (e.g., while(1) fork();)
+const string TIME_LIMIT = "10s";         // Hard kill switch for the container lifecycle
+const int THRESHOLD_MS = 9500;           // Threshold to distinguish OOM (fast kill) vs TLE (slow kill)
 
-// stored globally so signal handler can close it
+// Global pointer for the pipe so the signal handler can clean it up
 FILE* current_pipe = nullptr;
 
-// cleans up the pipe if executor gets interrupted (Ctrl+C or SIGTERM)
+// Graceful cleanup on Ctrl+C or SIGTERM
 void cleanup(int signum) {
     if (current_pipe) pclose(current_pipe);
     exit(signum);
 }
 
-// escapes special chars so raw output can be safely embedded in JSON
+// Safely escapes stdout/stderr so it doesn't break the JSON response sent to Node.js
 string json_escape(const string &input) {
+    if (input.empty()) return ""; // Optimization: skip empty strings
     string output = "";
     for (char c : input) {
         if (c == '\"') output += "\\\"";
@@ -46,6 +46,7 @@ string json_escape(const string &input) {
 
 // Node.js worker spawns this with: ./executor <jobId> <tempDirPath>
 int main(int argc, char *argv[]) {
+    // Register signal handlers for safe shutdown
     signal(SIGINT, cleanup);
     signal(SIGTERM, cleanup);
 
@@ -62,7 +63,7 @@ int main(int argc, char *argv[]) {
         fs::path codePath = tempDir / (jobId + ".cpp");
         fs::path inputPath = tempDir / (jobId + ".txt");
         
-        // macOS uses gtimeout (brew install coreutils), Linux uses timeout
+        // macOS uses 'gtimeout', Linux uses standard 'timeout'
         #ifdef __APPLE__
             string timeoutCmd = "gtimeout"; 
         #else
@@ -72,9 +73,12 @@ int main(int argc, char *argv[]) {
         string exeName = "r_" + jobId;
         string timeFileName = "time_" + jobId + ".txt";
         
-        // if input file exists, pipe it as stdin to the compiled binary
-        // We use single quotes for the outer sh -c command so that the host shell
-        // does not expand $var. The container's sh will expand $(date +%s%N).
+        // --- The Execution Command ---
+        // 1. Record start time in nanoseconds.
+        // 2. Run the compiled binary (piping input if it exists).
+        // 3. Capture the exit code.
+        // 4. Record end time and calculate execution duration in milliseconds.
+        // 5. Save the duration to a text file for accurate internal timing.
         string dockerRunCmd = "start=$(date +%s%N); ./" + exeName;
         if (fs::exists(inputPath)) {
             dockerRunCmd += " < " + jobId + ".txt";
@@ -100,7 +104,7 @@ int main(int argc, char *argv[]) {
         
         if (!current_pipe) throw runtime_error("Pipe failed");
 
-        // read container output, capped at MAX_OUTPUT_SIZE
+        // Read the output (stdout + stderr), capping at MAX_OUTPUT_SIZE to prevent buffer overflows
         string raw_out;
         array<char, 128> buf;
         while (fgets(buf.data(), buf.size(), current_pipe)) {
@@ -111,49 +115,70 @@ int main(int argc, char *argv[]) {
         current_pipe = nullptr;
         
         int exit_code = WEXITSTATUS(pclose_status);
+        
+        // End wall-clock timer (used as a fallback if internal timing fails)
         auto end = high_resolution_clock::now();
         long duration = duration_cast<milliseconds>(end - start).count();
 
-        // attempt to read pure execution time from timeFile
-        long exec_duration = duration; // fallback to full process time
+        // --- Extract Internal Execution Time ---
+        long exec_duration = duration; // Default to wall-clock time
         fs::path timeFile = tempDir / timeFileName;
         if (fs::exists(timeFile)) {
             FILE* tf = fopen(timeFile.c_str(), "r");
             if (tf) {
                 long fetched_time = 0;
                 if (fscanf(tf, "%ld", &fetched_time) == 1) {
-                    exec_duration = fetched_time;
+                    exec_duration = fetched_time; // Overwrite with precise internal time
                 }
                 fclose(tf);
             }
-            fs::remove(timeFile);
+            fs::remove(timeFile); // Cleanup the time file
         }
 
-        // clean up the binary created
+        // Cleanup the compiled binary
         fs::path exeFile = tempDir / exeName;
         if (fs::exists(exeFile)) {
             fs::remove(exeFile);
         }
 
-        // determine verdict from exit code and timing
-        string status = "AC";
+        // --- Verdict Evaluation Logic ---
+        string status = "AC"; // Assume Accepted initially
         
         if (exit_code == 124) {
-            status = "TLE";  // gtimeout killed it
+            // gtimeout/timeout killed the docker run command
+            status = "TLE";  
         } else if (exit_code == 137) {
-            // SIGKILL: if it died fast (<3.5s) = OOM killed (MLE), otherwise TLE
+            // SIGKILL (137) is issued by Docker's OOM killer
+            // If it died super fast, it was an OOM (MLE). If it died near the time limit, it was a TLE.
             if (duration < THRESHOLD_MS) status = "MLE";
             else status = "TLE";
         } else if (exit_code != 0) {
-            // check if g++ error messages present to distinguish CE from RE
+            // The program (or compiler) exited with an error
+            
+            // 1. Check for Compilation Error
             if (raw_out.find("error:") != string::npos || raw_out.find("fatal error:") != string::npos) {
                 status = "CE";
-            } else {
+                exec_duration = 0; // FIX: Prevent massive junk numbers because the binary never ran
+            } 
+            // 2. Check for C++ specific Memory Limit Exceeded (e.g., massive vector allocations)
+            else if (raw_out.find("std::bad_alloc") != string::npos) {
+                status = "MLE"; // FIX: Catch heap exhaustion before Docker OOM killer intervenes
+            } 
+            // 3. Catch-all for Runtime Errors (Segfaults, Out of Bounds, etc.)
+            else {
                 status = "RE";
             }
         }
 
-        // JSON output consumed by the Node.js worker
+        // --- Final Sanity Check ---
+        // If the time file parsing failed and gave a weird negative number, 
+        // and it wasn't a Compilation Error, fallback to the measured wall-clock duration
+        if (status != "CE" && exec_duration < 0) {
+            exec_duration = duration;
+        }
+
+        // --- JSON Response ---
+        // Output the final verdict securely to standard out so Node.js can parse it
         cout << "{"
              << "\"status\":\"" << status << "\","
              << "\"time_ms\":" << exec_duration << ","
@@ -161,6 +186,7 @@ int main(int argc, char *argv[]) {
              << "}" << endl;
 
     } catch (...) {
+        // Failsafe for internal C++ engine errors
         cout << "{\"status\":\"IE\",\"output\":\"INTERNAL: Engine Exception\"}" << endl;
     }
     return 0;
