@@ -45,6 +45,7 @@ function RoomDashboard() {
   const handleCloseRoom = async () => {
     if (!roomCode) return;
     showToast("Closing classroom for all students...", "error", 2000);
+    if (!socket.connected) socket.connect();
     socket.emit("host-closed-room", roomCode);
     try {
       await api.post(`/rooms/close/${roomCode}`);
@@ -97,6 +98,7 @@ function RoomDashboard() {
 
         // Helper to emit join
         const emitJoin = () => {
+          if (!socket.connected) socket.connect();
           socket.emit("join-room", {
             roomCode,
             username: user.username,

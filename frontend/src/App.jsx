@@ -7,7 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import RoomDashboard from "./pages/RoomDashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Spinner from "./components/ui/Spinner";
-
+import { socket } from "./utils/socket";
 
 function App() {
   // null = checking, true = logged in, false = not logged in
@@ -18,6 +18,9 @@ function App() {
       try {
         await api.get("/users/me");
         setIsAuthenticated(true);
+        if (!socket.connected) {
+          socket.connect();
+        }
       } catch (error) {
         setIsAuthenticated(false);
       }

@@ -74,6 +74,7 @@ function IDE() {
           setIsHost(userIsHost);
 
           const emitJoinRoom = () => {
+            if (!socket.connected) socket.connect();
             socket.emit("join-room", {
               roomCode,
               username: user.username,
@@ -230,6 +231,7 @@ function IDE() {
       return;
     }
     showToast("Closing classroom for all students...", "error", 2000);
+    if (!socket.connected) socket.connect();
     socket.emit("host-closed-room", roomCode);
     try {
       await api.post(`/rooms/close/${roomCode}`);
@@ -289,6 +291,7 @@ function IDE() {
           }
 
           if (roomCode && currentUser && type === "submit") {
+            if (!socket.connected) socket.connect();
             socket.emit("student-submission", {
               roomCode,
               username: currentUser.username,
@@ -755,6 +758,7 @@ function IDE() {
               size="sm"
               onClick={() => {
                 showToast("exiting room...", "info", 1500);
+                if (!socket.connected) socket.connect();
                 socket.emit("leave-room", roomCode);
                 setTimeout(() => navigate("/"), 1500);
               }}
