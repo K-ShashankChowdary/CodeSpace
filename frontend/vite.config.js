@@ -7,12 +7,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://codespace-api.duckdns.org', 
+        target: 'http://localhost:5000', 
         changeOrigin: true,
       },
       // Proxy for WebSockets
       '/socket.io': {
-        target: 'https://codespace-api.duckdns.org', 
+        target: 'http://localhost:5000', 
         ws: true,
         changeOrigin: true,
       }

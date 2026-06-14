@@ -109,7 +109,6 @@ export const initializeSockets = (httpServer) => {
 
     socket.on("host-closed-room", async (roomCode) => {
       socket.to(roomCode).emit("room-closed");
-      await Room.updateOne({ roomCode }, { isActive: false });
     });
 
     //STUDENT LEAVING LOGIC

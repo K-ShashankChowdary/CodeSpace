@@ -2,13 +2,8 @@
 import { io } from "socket.io-client";
 
 const getSocketUrl = () => {
-  const apiUrl = import.meta.env.VITE_API_URL || "https://codespace-api.duckdns.org/api/v1";
-  try {
-    const url = new URL(apiUrl);
-    return `${url.protocol}//${url.host}`;
-  } catch (e) {
-    return "https://codespace-api.duckdns.org";
-  }
+  // If VITE_SOCKET_URL is set, use it. Otherwise use empty string which defaults to window.location
+  return import.meta.env.VITE_SOCKET_URL || "";
 };
 
 const SOCKET_URL = getSocketUrl();
