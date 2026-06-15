@@ -18,37 +18,42 @@ const redisClient = createClient({
 
 redisClient.on("error", (err) => console.log("Redis Client Error", err));
 
-const runCpp = (jobId, code, input, testIndex) => {
-    return new Promise((resolve, reject) => {
-        // sanitize jobId to prevent command injection (only allow alphanumeric + hyphens)
-        if (!/^[a-f0-9]+$/i.test(jobId)) {
-            return resolve({ status: "IE", output: "Invalid job ID format" });
-        }
+const runCpp = async (jobId, code, input, testIndex) => {
+    if (!/^[a-f0-9]+$/i.test(jobId)) {
+        return { status: "IE", output: "Invalid job ID format" };
+    }
 
-        const uniqueId = `${jobId}_tc${testIndex}`;
-        const fileName = `${uniqueId}.cpp`;
-        const inputName = `${uniqueId}.txt`;
-        const tempDir = path.resolve(__dirname, "temp");
+    const uniqueId = `${jobId}_tc${testIndex}`;
+    const fileName = `${uniqueId}.cpp`;
+    const inputName = `${uniqueId}.txt`;
+    const tempDir = path.resolve(__dirname, "temp");
 
-        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+    try {
+        await fs.promises.access(tempDir);
+    } catch {
+        await fs.promises.mkdir(tempDir, { recursive: true });
+    }
 
-        const filePath = path.join(tempDir, fileName);
-        const inputPath = path.join(tempDir, inputName);
+    const filePath = path.join(tempDir, fileName);
+    const inputPath = path.join(tempDir, inputName);
 
-        fs.writeFileSync(filePath, code);
-        fs.writeFileSync(inputPath, input);
+    await fs.promises.writeFile(filePath, code);
+    await fs.promises.writeFile(inputPath, input);
 
-        const enginePath = path.resolve(__dirname, "../../engine/executor");
-        const command = `${enginePath} ${uniqueId} "${tempDir}"`;
+    const enginePath = path.resolve(__dirname, "../../engine/executor");
+    const command = `${enginePath} ${uniqueId} "${tempDir}"`;
 
-        // 30s timeout prevents hang if Docker daemon stalls
-        exec(command, { timeout: 30000 }, (error, stdout, stderr) => {
+    return new Promise((resolve) => {
+        exec(command, { timeout: 30000 }, async (error, stdout, stderr) => {
             try {
-                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-                if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-                // also clean up the compiled binary if it exists
-                const binaryPath = path.join(tempDir, `r_${uniqueId}`);
-                if (fs.existsSync(binaryPath)) fs.unlinkSync(binaryPath);
+                const safeUnlink = async (p) => {
+                    try { await fs.promises.unlink(p); } catch (e) {}
+                };
+                await Promise.all([
+                    safeUnlink(filePath),
+                    safeUnlink(inputPath),
+                    safeUnlink(path.join(tempDir, `r_${uniqueId}`))
+                ]);
             } catch (cleanupErr) {
                 console.error(`[Job ${jobId}] Cleanup failed:`, cleanupErr);
             }
@@ -116,21 +121,28 @@ const processSubmission = async (submissionStr) => {
             maxTime = Math.max(maxTime, result.time_ms || 0);
         }
 
-        await Submission.findByIdAndUpdate(jobId, {
+        const jobData = {
             status: finalVerdict,
             output: JSON.stringify(allResults),
             timeTaken: maxTime
-        });
+        };
+
+        await Submission.findByIdAndUpdate(jobId, jobData);
+        await redisClient.publish("job-updates", JSON.stringify({ jobId, ...jobData }));
 
         console.log(`[Job ${jobId}] Completed with Final Verdict: ${finalVerdict}`);
         console.log(`========================================\n`);
 
     } catch (error) {
         console.error(`[Job ${jobId}] System Crash:`, error);
-        await Submission.findByIdAndUpdate(jobId, {
+        
+        const errorData = {
             status: "IE",
             output: JSON.stringify([{ status: "IE", actual: error.message }])
-        });
+        };
+
+        await Submission.findByIdAndUpdate(jobId, errorData);
+        await redisClient.publish("job-updates", JSON.stringify({ jobId, ...errorData }));
     }
 };
 

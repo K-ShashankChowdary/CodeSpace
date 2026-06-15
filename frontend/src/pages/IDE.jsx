@@ -41,7 +41,7 @@ function IDE() {
 
   // Notification State
   const [toast, setToast] = useState(null);
-  const pollingIntervalRef = useRef(null);
+  const lastExecutionTypeRef = useRef(null);
 
   const showToast = (message, type = "info") => {
     setToast({ message, type });
@@ -103,7 +103,6 @@ function IDE() {
       socket.off("student-left");
       socket.off("leaderboard-update");
       socket.off("room-closed");
-      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
     };
   }, [id, roomCode, navigate]);
 
@@ -207,6 +206,33 @@ function IDE() {
     if (activeTab === "submissions") fetchHistory();
   }, [activeTab]);
 
+  useEffect(() => {
+    const handleJobVerdict = (jobData) => {
+      setStatus(jobData.status);
+      setOutput(jobData.output || "");
+      setIsRunning(false);
+      setIsSubmitting(false);
+
+      if (lastExecutionTypeRef.current === "submit") {
+        if (activeTabRef.current === "submissions") {
+          fetchHistory();
+        }
+        if (roomCode && currentUser) {
+          if (!socket.connected) socket.connect();
+          socket.emit("student-submission", {
+            roomCode,
+            username: currentUser.username,
+            status: jobData.status,
+            problemId: id,
+          });
+        }
+      }
+    };
+
+    socket.on("job-verdict", handleJobVerdict);
+    return () => socket.off("job-verdict", handleJobVerdict);
+  }, [roomCode, currentUser, id]);
+
   const fetchHistory = async () => {
     try {
       const response = await api.get(`/submissions/history/${id}`);
@@ -218,6 +244,11 @@ function IDE() {
 
   const handleLogout = async () => {
     try {
+      if (roomCode) {
+        if (!socket.connected) socket.connect();
+        socket.emit("leave-room", roomCode);
+        socket.disconnect();
+      }
       await api.post("/users/logout");
       window.location.href = "/auth";
     } catch (error) {
@@ -246,6 +277,7 @@ function IDE() {
 
   const handleExecution = async (type) => {
     if (!code.trim()) return;
+    lastExecutionTypeRef.current = type;
     type === "run" ? setIsRunning(true) : setIsSubmitting(true);
     setStatus("Queued");
     setOutput("Processing...");
@@ -259,54 +291,14 @@ function IDE() {
         code: code,
         executionType: type,
       });
-      pollJobStatus(response.data.data.jobId, type);
+      const jobId = response.data.data.jobId;
+      if (!socket.connected) socket.connect();
+      socket.emit("subscribe-job", jobId);
     } catch (error) {
       setStatus("Error");
       setIsRunning(false);
       setIsSubmitting(false);
     }
-  };
-
-  const pollJobStatus = (jobId, type) => {
-    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-    pollingIntervalRef.current = setInterval(async () => {
-      try {
-        const response = await api.get(`/submissions/status/${jobId}`);
-        const jobData = response.data.data;
-
-        if (
-          jobData &&
-          jobData.status !== "Pending" &&
-          jobData.status !== "Executing"
-        ) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-          setStatus(jobData.status);
-          setOutput(jobData.output || "");
-          setIsRunning(false);
-          setIsSubmitting(false);
-
-          if (type === "submit" && activeTabRef.current === "submissions") {
-            fetchHistory();
-          }
-
-          if (roomCode && currentUser && type === "submit") {
-            if (!socket.connected) socket.connect();
-            socket.emit("student-submission", {
-              roomCode,
-              username: currentUser.username,
-              status: jobData.status,
-              problemId: id,
-            });
-          }
-        }
-      } catch (error) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-        setIsRunning(false);
-        setIsSubmitting(false);
-      }
-    }, 1500);
   };
 
   const handleRestoreCode = (submissionCode) => {
