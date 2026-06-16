@@ -18,7 +18,7 @@ function RoomDashboard() {
   const navigate = useNavigate();
   const [room, setRoom] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const [isHost, setIsHost] = useState(false);
+  const [isInterviewer, setIsInterviewer] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
@@ -44,9 +44,9 @@ function RoomDashboard() {
 
   const handleCloseRoom = async () => {
     if (!roomCode) return;
-    showToast("Closing classroom for all students...", "error", 2000);
+    showToast("Closing interview for all candidates...", "error", 2000);
     if (!socket.connected) socket.connect();
-    socket.emit("host-closed-room", roomCode);
+    socket.emit("interviewer-closed-room", roomCode);
     try {
       await api.post(`/rooms/close/${roomCode}`);
     } catch (error) {
@@ -61,7 +61,7 @@ function RoomDashboard() {
 
   const handleExitRoom = async () => {
     if (!roomCode) return;
-    showToast("Exiting classroom...", "info", 1500);
+    showToast("Leaving interview...", "info", 1500);
     try {
       await api.post(`/rooms/leave/${roomCode}`);
     } catch (error) {
@@ -93,8 +93,8 @@ function RoomDashboard() {
         setCurrentUser(user);
         setRoom(roomData);
 
-        const userIsHost = roomData.host._id.toString() === user._id.toString();
-        setIsHost(userIsHost);
+        const userIsInterviewer = roomData.interviewer._id.toString() === user._id.toString();
+        setIsInterviewer(userIsInterviewer);
 
         // Helper to emit join
         const emitJoin = () => {
@@ -103,7 +103,7 @@ function RoomDashboard() {
             roomCode,
             username: user.username,
             userId: user._id,
-            isHost: userIsHost,
+            isInterviewer: userIsInterviewer,
           });
         };
 
@@ -117,14 +117,14 @@ function RoomDashboard() {
       } catch (err) {
         console.error("Room Details Error:", err);
         setError(
-          err.response?.data?.message || "Failed to load classroom details.",
+          err.response?.data?.message || "Failed to load interview details.",
         );
       } finally {
         setLoading(false);
       }
 
       const handleGlobalLeaderboardUpdate = (data) => {
-        if (!isHost) return; // Only notify the teacher
+        if (!isInterviewer) return; // Only notify the interviewer
 
         if (data.status === "AC") {
           showToast(`🔥 ${data.username} got an AC!`, "success", 4000);
@@ -135,18 +135,18 @@ function RoomDashboard() {
 
       // 1. Destroy ghost listeners
       socket.off("leaderboard-update");
-      socket.off("student-joined");
-      socket.off("student-left");
+      socket.off("candidate-joined");
+      socket.off("candidate-left");
 
       // 2. Attach them normally (ONLY the ones that exist in this file!)
-      socket.on("student-joined", handleStudentJoined);
-      socket.on("student-left", handleStudentLeft);
+      socket.on("candidate-joined", handleCandidateJoined);
+      socket.on("candidate-left", handleCandidateLeft);
       socket.on("leaderboard-update", handleGlobalLeaderboardUpdate);
 
       return () => {
         socket.off("connect");
-        socket.off("student-joined", handleStudentJoined);
-        socket.off("student-left", handleStudentLeft);
+        socket.off("candidate-joined", handleCandidateJoined);
+        socket.off("candidate-left", handleCandidateLeft);
         socket.off("room-closed", handleRoomClosed);
         socket.off("leaderboard-update", handleGlobalLeaderboardUpdate); // Clean up
       };
@@ -155,23 +155,23 @@ function RoomDashboard() {
     fetchRoomData();
 
     // Live Listeners
-    const handleStudentJoined = (student) => {
-      showToast(`Student joined: ${student.username}`, "info");
+    const handleCandidateJoined = (candidate) => {
+      showToast(`Candidate joined: ${candidate.username}`, "info");
       setRoom((prev) => {
         if (!prev) return prev;
-        if (prev.participants.some((p) => p._id === student._id)) return prev;
-        return { ...prev, participants: [...prev.participants, student] };
+        if (prev.participants.some((p) => p._id === candidate._id)) return prev;
+        return { ...prev, participants: [...prev.participants, candidate] };
       });
     };
 
-    const handleStudentLeft = (student) => {
-      showToast(`Student left: ${student.username}`, "error");
+    const handleCandidateLeft = (candidate) => {
+      showToast(`Candidate left: ${candidate.username}`, "error");
       setRoom((prev) =>
         prev
           ? {
               ...prev,
               participants: prev.participants.filter(
-                (p) => p._id !== student._id,
+                (p) => p._id !== candidate._id,
               ),
             }
           : null,
@@ -179,21 +179,21 @@ function RoomDashboard() {
     };
 
     const handleRoomClosed = () => {
-      showToast("The host has closed the classroom. Exiting...", "error", 3000);
+      showToast("The interviewer has closed the session. Exiting...", "error", 3000);
       setTimeout(() => {
         if (socket.connected) socket.disconnect();
         navigate("/");
       }, 3000);
     };
 
-    socket.on("student-joined", handleStudentJoined);
-    socket.on("student-left", handleStudentLeft);
+    socket.on("candidate-joined", handleCandidateJoined);
+    socket.on("candidate-left", handleCandidateLeft);
     socket.on("room-closed", handleRoomClosed);
 
     return () => {
       socket.off("connect");
-      socket.off("student-joined", handleStudentJoined);
-      socket.off("student-left", handleStudentLeft);
+      socket.off("candidate-joined", handleCandidateJoined);
+      socket.off("candidate-left", handleCandidateLeft);
       socket.off("room-closed", handleRoomClosed);
     };
   }, [roomCode, navigate]);
@@ -201,7 +201,7 @@ function RoomDashboard() {
   if (loading) {
     return (
       <div className="h-screen bg-[#050505] flex items-center justify-center">
-        <Spinner size="md" label="Loading Classroom" />
+        <Spinner size="md" label="Loading Interview Room" />
       </div>
     );
   }
@@ -215,7 +215,7 @@ function RoomDashboard() {
           </h3>
           <p className="text-sm opacity-80">
             {error ||
-              "This classroom is no longer active or you don't have access."}
+              "This interview room is no longer active or you don't have access."}
           </p>
         </div>
         <Button variant="secondary" onClick={() => navigate("/")}>
@@ -249,28 +249,28 @@ function RoomDashboard() {
         <div className="p-5 flex-1 flex flex-col gap-8">
           <div className="space-y-1.5">
             <span className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-3 block">
-              Classroom Actions
+              Interview Actions
             </span>
-            {isHost ? (
+            {isInterviewer ? (
               <button
                 onClick={handleCloseRoom}
                 className="w-full text-left px-4 py-2.5 rounded-xl text-red-500 font-bold text-sm hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20 group flex justify-between items-center"
               >
-                ‹ Close Classroom
+                ‹ End Interview
               </button>
             ) : (
               <button
                 onClick={handleExitRoom}
                 className="w-full text-left px-4 py-2.5 rounded-xl text-zinc-500 font-bold text-sm hover:bg-zinc-900 transition-all border border-transparent hover:border-zinc-800 group flex justify-between items-center"
               >
-                ‹ Exit Classroom
+                ‹ Leave Interview
               </button>
             )}
             <div
               className="w-full px-4 py-2.5 mt-2 rounded-xl bg-blue-500/10 
             text-blue-400 font-bold text-sm border border-blue-500/20 inner-glow"
             >
-              Classroom View
+              Interview View
             </div>
           </div>
 
@@ -281,10 +281,10 @@ function RoomDashboard() {
             <div className="space-y-3">
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest">
-                  Host
+                  Interviewer
                 </span>
                 <span className="text-zinc-200 text-sm font-black tracking-tight">
-                  {room.host?.username || "Unknown"}
+                  {room.interviewer?.username || "Unknown"}
                 </span>
               </div>
               <div className="flex flex-col gap-1 pt-3 border-t border-zinc-800/50">
@@ -321,16 +321,16 @@ function RoomDashboard() {
               Session Workspace
             </h2>
           </div>
-          {isHost && (
+          {isInterviewer && (
             <div className="flex items-center gap-3 px-5 py-2.5 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 backdrop-blur-xl">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
-                  Students Connected
+                  Candidates Connected
                 </span>
               </div>
               <span className="text-lg font-black text-white px-2 border-l border-zinc-800/80 ml-2">
-                {room.participants?.filter((p) => p._id !== room.host?._id).length || 0}
+                {room.participants?.filter((p) => p._id !== room.interviewer?._id).length || 0}
               </span>
             </div>
           )}
@@ -388,14 +388,14 @@ function RoomDashboard() {
                     >
                       <div
                         className={`flex items-center justify-center gap-2 px-5 py-2 rounded-full border font-black text-[10px] uppercase tracking-widest transition-all transform group-hover:scale-105 ${
-                          isHost
+                          isInterviewer
                             ? "bg-blue-500/10 border-blue-500/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white"
                             : "bg-zinc-900 border-zinc-800 text-zinc-500 group-hover:bg-green-600 group-hover:text-white"
                         }`}
                       >
                         <div className="flex items-center gap-2 pointer-events-none">
-                          <span>{isHost ? "View Progress" : "Solve"}</span>
-                          {isHost ? (
+                          <span>{isInterviewer ? "View Progress" : "Solve"}</span>
+                          {isInterviewer ? (
                             <Users className="w-3.5 h-3.5 shrink-0" />
                           ) : (
                             <Play className="w-3.5 h-3.5 fill-current shrink-0" />

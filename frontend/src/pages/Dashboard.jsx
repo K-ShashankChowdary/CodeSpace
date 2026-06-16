@@ -146,7 +146,7 @@ function Dashboard() {
               Problem Set
             </div>
             <button onClick={() => setIsModalOpen(true)} className="w-full text-left px-4 py-2.5 rounded-xl text-zinc-500 font-bold text-sm hover:bg-zinc-900 transition-all group flex justify-between items-center">
-              Host Classroom
+              Host Interview
               <span className="opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-blue-500 font-black">›</span>
             </button>
           </div>
@@ -155,14 +155,14 @@ function Dashboard() {
             <form onSubmit={handleJoinRoom} className="px-1 flex flex-col gap-3">
               <Input
                 name="roomCode"
-                placeholder="Classroom Code"
+                placeholder="Interview Code"
                 value={roomCodeInput}
                 onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
                 maxLength={6}
                 className="w-full font-mono uppercase bg-zinc-900/30 border-zinc-800/40 text-xs"
               />
               <Button type="submit" variant="primary" disabled={!roomCodeInput.trim() || isJoiningRoom} className="w-full text-[10px]">
-                {isJoiningRoom ? "Joining..." : "Join Classroom"}
+                {isJoiningRoom ? "Joining..." : "Join Interview"}
               </Button>
             </form>
           </div>
@@ -289,7 +289,7 @@ function Dashboard() {
                   <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
                     <Users className="w-5 h-5 text-blue-400" />
                   </div>
-                  Host Session
+                  Create Interview Session
                 </h2>
                 <p className="text-[10px] text-zinc-500 mt-2 uppercase tracking-[0.2em] font-black flex items-center gap-2">
                   <span className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
@@ -392,7 +392,7 @@ function Dashboard() {
                    {isCreatingRoom ? <Spinner size="sm" /> : (
                      <span className="flex items-center gap-3">
                        <Play className="w-5 h-5 fill-current" />
-                       Start Classroom
+                       Start Interview
                      </span>
                    )}
                  </Button>
