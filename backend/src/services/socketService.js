@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import { Room } from "../models/room.model.js";
+import { Submission } from "../models/submission.model.js";
 import { createClient } from "redis";
 
 dotenv.config({ path: "./.env" });
@@ -43,13 +44,30 @@ export const initializeSockets = (httpServer) => {
       socket.data.username = decoded.username;
       next();
     } catch (err) {
+      console.log("Socket Auth Error:", err.message);
       next(new Error("Auth Error"));
     }
   });
 
   io.on("connection", (socket) => {
-    socket.on("subscribe-job", (jobId) => {
+    console.log(`[Socket] Client connected: ${socket.id} (user: ${socket.data.username})`);
+    
+    socket.on("subscribe-job", async (jobId) => {
+      console.log(`[Socket] ${socket.data.username} subscribed to job_${jobId}`);
       socket.join(`job_${jobId}`);
+      try {
+        const submission = await Submission.findById(jobId);
+        if (submission && submission.status !== "Pending") {
+          console.log(`[Socket] Job ${jobId} already finished (${submission.status}), emitting immediately`);
+          socket.emit("job-verdict", {
+            jobId: submission._id.toString(),
+            status: submission.status,
+            output: submission.output
+          });
+        }
+      } catch (err) {
+        console.error("Failed to check job status on subscribe:", err);
+      }
     });
 
     socket.on("join-room", async (data) => {
@@ -66,25 +84,25 @@ export const initializeSockets = (httpServer) => {
 
         // Populate the studentId so we have the username for the UI
         const room = await Room.findOne({ roomCode, isActive: true }).populate(
-          "studentProgress.studentId",
+          "candidateProgress.candidateId",
           "username",
         );
 
         if (!room) return;
 
-        const isHost = room.host.toString() === socket.data.userId.toString();
-        socket.data.isHost = isHost;
+        const isInterviewer = room.interviewer.toString() === socket.data.userId.toString();
+        socket.data.isInterviewer = isInterviewer;
 
-        if (isHost) {
+        if (isInterviewer) {
           //  Map the populated username instead of the raw ObjectId
-          const allProgress = room.studentProgress.map((p) => ({
-            username: p.studentId?.username,
+          const allProgress = room.candidateProgress.map((p) => ({
+            username: p.candidateId?.username,
             results: Object.fromEntries(p.results),
           }));
           socket.emit("sync-entire-leaderboard", allProgress);
         } else {
-          // Now we guarantee the username is actually defined when emitting to the host
-          socket.to(roomCode).emit("student-joined", {
+          // Now we guarantee the username is actually defined when emitting to the interviewer
+          socket.to(roomCode).emit("candidate-joined", {
             _id: socket.data.userId,
             username: socket.data.username,
           });
@@ -95,25 +113,25 @@ export const initializeSockets = (httpServer) => {
       }
     });
 
-    socket.on("student-submission", async (data) => {
+    socket.on("candidate-submission", async (data) => {
       const { roomCode, status, problemId, username } = data;
       try {
         const room = await Room.findOne({ roomCode, isActive: true });
         if (!room) return;
 
-        let progress = room.studentProgress.find(
-          (p) => p.studentId.toString() === socket.data.userId.toString(),
+        let progress = room.candidateProgress.find(
+          (p) => p.candidateId.toString() === socket.data.userId.toString(),
         );
         if (!progress) {
-          progress = { studentId: socket.data.userId, results: new Map() };
-          room.studentProgress.push(progress);
+          progress = { candidateId: socket.data.userId, results: new Map() };
+          room.candidateProgress.push(progress);
         }
 
         const currentStatusInDB = progress.results.get(problemId);
 
         if (currentStatusInDB !== "AC") {
           progress.results.set(problemId, status);
-          room.markModified("studentProgress");
+          room.markModified("candidateProgress");
           await room.save();
           io.to(roomCode).emit("leaderboard-update", {
             username,
@@ -132,16 +150,16 @@ export const initializeSockets = (httpServer) => {
       }
     });
 
-    socket.on("host-closed-room", async (roomCode) => {
+    socket.on("interviewer-closed-room", async (roomCode) => {
       socket.to(roomCode).emit("room-closed");
     });
 
-    //STUDENT LEAVING LOGIC
+    // CANDIDATE LEAVING LOGIC
     socket.on("disconnect", () => {
-      const { roomCode, userId, username, isHost } = socket.data;
-      if (roomCode && userId && !isHost) {
-        console.log(`👤 Student Left: ${username} from ${roomCode}`);
-        socket.to(roomCode).emit("student-left", { _id: userId, username });
+      const { roomCode, userId, username, isInterviewer } = socket.data;
+      if (roomCode && userId && !isInterviewer) {
+        console.log(`👤 Candidate Left: ${username} from ${roomCode}`);
+        socket.to(roomCode).emit("candidate-left", { _id: userId, username });
       }
     });
   });
