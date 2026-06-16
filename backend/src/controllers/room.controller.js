@@ -8,7 +8,7 @@ const createRoom = asyncHandler(async (req, res) => {
     const { problems } = req.body;
 
     if (!problems || !Array.isArray(problems) || problems.length === 0) {
-        throw new ApiError(400, "At least one problem must be selected to start a room");
+        throw new ApiError(400, "At least one problem must be selected to start an interview room");
     }
 
     let roomCode;
@@ -17,21 +17,21 @@ const createRoom = asyncHandler(async (req, res) => {
         roomCode = crypto.randomBytes(3).toString("hex").toUpperCase();
         const existing = await Room.findOne({ roomCode, isActive: true });
         if (!existing) break;
-        if (attempt === 4) throw new ApiError(500, "Failed to generate unique room code");
+        if (attempt === 4) throw new ApiError(500, "Failed to generate unique interview room code");
     }
 
     room = await Room.create({
         roomCode,
-        host: req.user._id,
+        interviewer: req.user._id,
         problems,
         participants: [req.user._id]  
     });
 
-    // 🚨 FIX: Explicitly append 'teacher' role 
-    const responseData = { ...room.toObject(), role: "teacher" };
+    // 🚨 FIX: Explicitly append 'interviewer' role 
+    const responseData = { ...room.toObject(), role: "interviewer" };
 
     return res.status(201).json(
-        new ApiResponse(201, responseData, "Room initialized successfully")
+        new ApiResponse(201, responseData, "Interview room initialized successfully")
     );
 });
 
@@ -39,7 +39,7 @@ const joinRoom = asyncHandler(async (req, res) => {
     const { roomCode } = req.body;
 
     if (!roomCode) {
-        throw new ApiError(400, "Please provide a valid room code");
+        throw new ApiError(400, "Please provide a valid interview room code");
     }
 
     const room = await Room.findOne({ 
@@ -48,7 +48,7 @@ const joinRoom = asyncHandler(async (req, res) => {
     });
 
     if (!room) {
-        throw new ApiError(404, "This room does not exist or has been closed");
+        throw new ApiError(404, "This interview room does not exist or has been closed");
     }
 
     const isAlreadyParticipant = room.participants.some(p => p.equals(req.user._id));
@@ -58,14 +58,14 @@ const joinRoom = asyncHandler(async (req, res) => {
         await room.save();
     }
 
-    // 🚨 FIX: Calculate if this user is the host or a student
-    const isHost = room.host.equals(req.user._id);
-    const calculatedRole = isHost ? "teacher" : "student";
+    // 🚨 FIX: Calculate if this user is the interviewer or a candidate
+    const isInterviewer = room.interviewer.equals(req.user._id);
+    const calculatedRole = isInterviewer ? "interviewer" : "candidate";
 
     const responseData = { ...room.toObject(), role: calculatedRole };
 
     return res.status(200).json(
-        new ApiResponse(200, responseData, "Successfully joined the room")
+        new ApiResponse(200, responseData, "Successfully joined the interview room")
     );
 });
 
@@ -73,16 +73,16 @@ const getRoomDetails = asyncHandler(async (req, res) => {
     const { roomCode } = req.params;
 
     const room = await Room.findOne({ roomCode: roomCode.toUpperCase(), isActive: true })
-        .populate("host", "username email")
+        .populate("interviewer", "username email")
         .populate("participants", "username email")
         .populate("problems", "title difficulty");
 
     if (!room) {
-        throw new ApiError(404, "Room not found or inactive");
+        throw new ApiError(404, "Interview room not found or inactive");
     }
 
     return res.status(200).json(
-        new ApiResponse(200, room, "Room details fetched")
+        new ApiResponse(200, room, "Interview room details fetched")
     );
 });
 
@@ -91,18 +91,18 @@ const closeRoom = asyncHandler(async (req, res) => {
     const room = await Room.findOne({ roomCode: roomCode.toUpperCase(), isActive: true });
 
     if (!room) {
-        throw new ApiError(404, "Room not found or already closed");
+        throw new ApiError(404, "Interview room not found or already closed");
     }
 
-    if (!room.host.equals(req.user._id)) {
-        throw new ApiError(403, "Only the host can close the room");
+    if (!room.interviewer.equals(req.user._id)) {
+        throw new ApiError(403, "Only the interviewer can close the interview room");
     }
 
     room.isActive = false;
     await room.save();
 
     return res.status(200).json(
-        new ApiResponse(200, null, "Room closed successfully")
+        new ApiResponse(200, null, "Interview room closed successfully")
     );
 });
 const leaveRoom = asyncHandler(async (req, res) => {

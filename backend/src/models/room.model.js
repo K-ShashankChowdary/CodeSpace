@@ -10,7 +10,7 @@ const roomSchema = new Schema(
             trim: true,
             index: true
         },
-        host: {
+        interviewer: {
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true
@@ -28,9 +28,9 @@ const roomSchema = new Schema(
             }
         ],
         // 🚨 NEW: Stores persistent progress for the leaderboard
-        studentProgress: [
+        candidateProgress: [
             {
-                studentId: { type: Schema.Types.ObjectId, ref: "User" },
+                candidateId: { type: Schema.Types.ObjectId, ref: "User" },
                 // Map of ProblemId -> Status (e.g., "AC", "WA")
                 results: { type: Map, of: String, default: {} }
             }
