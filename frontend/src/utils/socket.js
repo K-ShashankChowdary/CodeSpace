@@ -12,10 +12,6 @@ export const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: false,
   transports: ["polling", "websocket"],
-  // 🚨 THIS IS THE KEY: It sends the token from your screenshot to the backend
-  auth: (cb) => {
-    cb({ token: localStorage.getItem("accessToken") });
-  }
 });
 
 socket.on("connect", () => console.log(`[Socket] Connected: ${socket.id}`));

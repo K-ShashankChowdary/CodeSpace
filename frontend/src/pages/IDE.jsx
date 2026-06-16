@@ -19,7 +19,7 @@ function IDE() {
   // Classroom State
   const [room, setRoom] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const [isHost, setIsHost] = useState(false);
+  const [isInterviewer, setIsInterviewer] = useState(false);
   const [liveStatuses, setLiveStatuses] = useState({});
 
   // Problem & IDE State
@@ -29,6 +29,10 @@ function IDE() {
   const activeTabRef = useRef(activeTab);
   const [history, setHistory] = useState([]);
   const [activeTestCase, setActiveTestCase] = useState(0);
+
+  // Instead of relying on React state for the code (which causes lag/cursor jumps with Yjs),
+  // we store a reference to the Monaco editor directly.
+  const monacoEditorRef = useRef(null);
 
   const [code, setCode] = useState(
     `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n \n \treturn 0;\n}`,
@@ -67,11 +71,11 @@ function IDE() {
           setRoom(roomData);
 
           //Convert both IDs to strings before comparing to prevent UI swapping
-          const hostId = roomData.host._id.toString();
+          const interviewerId = roomData.interviewer._id.toString();
           const currentUserId = user._id.toString();
-          const userIsHost = hostId === currentUserId;
+          const userIsInterviewer = interviewerId === currentUserId;
 
-          setIsHost(userIsHost);
+          setIsInterviewer(userIsInterviewer);
 
           const emitJoinRoom = () => {
             if (!socket.connected) socket.connect();
@@ -79,7 +83,7 @@ function IDE() {
               roomCode,
               username: user.username,
               userId: user._id,
-              isHost: userIsHost,
+              isInterviewer: userIsInterviewer,
             });
           };
 
@@ -99,36 +103,36 @@ function IDE() {
 
     return () => {
       socket.off("connect");
-      socket.off("student-joined");
-      socket.off("student-left");
+      socket.off("candidate-joined");
+      socket.off("candidate-left");
       socket.off("leaderboard-update");
       socket.off("room-closed");
     };
   }, [id, roomCode, navigate]);
 
-  // --- EFFECT 2: TEACHER-ONLY NOTIFICATIONS (TOASTS) ---
+  // --- EFFECT 2: INTERVIEWER-ONLY NOTIFICATIONS (TOASTS) ---
   useEffect(() => {
-    // 🚨 Exit if not in a room, or if the user is a student.
-    // This ensures ONLY the teacher sees the toasts.
-    if (!roomCode || !isHost) return;
+    // 🚨 Exit if not in a room, or if the user is a candidate.
+    // This ensures ONLY the interviewer sees the toasts.
+    if (!roomCode || !isInterviewer) return;
 
-    const handleStudentJoined = (student) => {
-      showToast(`Student joined: ${student.username}`, "info");
+    const handleCandidateJoined = (candidate) => {
+      showToast(`Candidate joined: ${candidate.username}`, "info");
       setRoom((prev) => {
         if (!prev) return prev;
-        if (prev.participants.some((p) => p._id === student._id)) return prev;
-        return { ...prev, participants: [...prev.participants, student] };
+        if (prev.participants.some((p) => p._id === candidate._id)) return prev;
+        return { ...prev, participants: [...prev.participants, candidate] };
       });
     };
 
-    const handleStudentLeft = (student) => {
-      showToast(`Student left: ${student.username}`, "error");
+    const handleCandidateLeft = (candidate) => {
+      showToast(`Candidate left: ${candidate.username}`, "error");
       setRoom((prev) =>
         prev
           ? {
               ...prev,
               participants: prev.participants.filter(
-                (p) => p._id !== student._id,
+                (p) => p._id !== candidate._id,
               ),
             }
           : null,
@@ -138,7 +142,7 @@ function IDE() {
     const handleSyncLeaderboard = (allProgress) => {
       const loadedStatuses = {};
       allProgress.forEach((p) => {
-        // Only load the statuses for the SPECIFIC problem the teacher is currently viewing
+        // Only load the statuses for the SPECIFIC problem the interviewer is currently viewing
         if (p.username && p.results[id]) {
           loadedStatuses[p.username] = p.results[id];
         }
@@ -147,7 +151,7 @@ function IDE() {
     };
 
     const handleLeaderboardUpdate = (data) => {
-      // Filter out noisy statuses so the teacher only sees final results
+      // Filter out noisy statuses so the interviewer only sees final results
       if (
         data.status !== "Queued" &&
         data.status !== "Executing" &&
@@ -160,35 +164,35 @@ function IDE() {
         }
       }
 
-      // Update the visual leaderboard UI ONLY if the teacher is looking at this exact problem
+      // Update the visual leaderboard UI ONLY if the interviewer is looking at this exact problem
       if (data.problemId === id) {
         setLiveStatuses((prev) => ({ ...prev, [data.username]: data.status }));
       }
     };
     socket.off("sync-entire-leaderboard");
     socket.off("leaderboard-update");
-    socket.off("student-joined");
-    socket.off("student-left");
+    socket.off("candidate-joined");
+    socket.off("candidate-left");
 
     socket.on("sync-entire-leaderboard", handleSyncLeaderboard);
     socket.on("leaderboard-update", handleLeaderboardUpdate);
-    socket.on("student-joined", handleStudentJoined);
-    socket.on("student-left", handleStudentLeft);
+    socket.on("candidate-joined", handleCandidateJoined);
+    socket.on("candidate-left", handleCandidateLeft);
 
     return () => {
       socket.off("sync-entire-leaderboard", handleSyncLeaderboard);
       socket.off("leaderboard-update", handleLeaderboardUpdate);
-      socket.off("student-joined", handleStudentJoined);
-      socket.off("student-left", handleStudentLeft);
+      socket.off("candidate-joined", handleCandidateJoined);
+      socket.off("candidate-left", handleCandidateLeft);
     };
-  }, [isHost, roomCode, id]);
+  }, [isInterviewer, roomCode, id]);
 
-  // --- EFFECT 3: STUDENT-ONLY LISTENERS ---
+  // --- EFFECT 3: CANDIDATE-ONLY LISTENERS ---
   useEffect(() => {
-    if (isHost || !roomCode) return;
+    if (isInterviewer || !roomCode) return;
 
     const handleRoomClosed = () => {
-      showToast("The host has closed the classroom. Exiting...", "error", 3000);
+      showToast("The interviewer has closed the session. Exiting...", "error", 3000);
       setTimeout(() => {
         navigate("/");
       }, 3000);
@@ -196,7 +200,7 @@ function IDE() {
 
     socket.on("room-closed", handleRoomClosed);
     return () => socket.off("room-closed", handleRoomClosed);
-  }, [isHost, roomCode, navigate]);
+  }, [isInterviewer, roomCode, navigate]);
 
   // Sync ref for polling and auto-fetch history
   useEffect(() => {
@@ -219,7 +223,7 @@ function IDE() {
         }
         if (roomCode && currentUser) {
           if (!socket.connected) socket.connect();
-          socket.emit("student-submission", {
+          socket.emit("candidate-submission", {
             roomCode,
             username: currentUser.username,
             status: jobData.status,
@@ -261,9 +265,9 @@ function IDE() {
       navigate("/");
       return;
     }
-    showToast("Closing classroom for all students...", "error", 2000);
+    showToast("Closing interview for all candidates...", "error", 2000);
     if (!socket.connected) socket.connect();
-    socket.emit("host-closed-room", roomCode);
+    socket.emit("interviewer-closed-room", roomCode);
     try {
       await api.post(`/rooms/close/${roomCode}`);
     } catch (error) {
@@ -276,7 +280,10 @@ function IDE() {
   };
 
   const handleExecution = async (type) => {
-    if (!code.trim()) return;
+    // Grab the latest code directly from the Monaco editor instance (or fallback to state)
+    const currentCode = monacoEditorRef.current ? monacoEditorRef.current.getValue() : code;
+    if (!currentCode.trim()) return;
+    
     lastExecutionTypeRef.current = type;
     type === "run" ? setIsRunning(true) : setIsSubmitting(true);
     setStatus("Queued");
@@ -288,7 +295,7 @@ function IDE() {
       const response = await api.post("/submissions/submit", {
         problemId: id,
         language: "cpp",
-        code: code,
+        code: currentCode,
         executionType: type,
       });
       const jobId = response.data.data.jobId;
@@ -303,7 +310,11 @@ function IDE() {
 
   const handleRestoreCode = (submissionCode) => {
     if (submissionCode) {
-      setCode(submissionCode);
+      if (monacoEditorRef.current) {
+        monacoEditorRef.current.setValue(submissionCode);
+      } else {
+        setCode(submissionCode);
+      }
       setActiveTab("description");
     }
   };
@@ -470,182 +481,11 @@ function IDE() {
     );
 
   // ==========================================
-  // --- VIEW 1: TEACHER VIEW (Leaderboard) ---
+  // Both Interviewer and Candidate share the same IDE view.
   // ==========================================
-  if (isHost) {
-    return (
-      <div className="min-h-screen bg-[#050505] text-white p-8 font-sans relative">
-        {toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
-        )}
-        <header className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-6">
-          <div className="flex items-center gap-6">
-            <button
-              onClick={() => navigate(`/room/${roomCode}`)}
-              className="flex items-center gap-2 group text-zinc-500 hover:text-white transition-colors"
-            >
-              <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 group-hover:border-blue-500/50 group-hover:shadow-[0_0_15px_rgba(37,99,235,0.2)] transition-all">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2.5}
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-              </div>
-              <span className="text-[10px] font-bold uppercase tracking-widest">
-                Return to Classroom
-              </span>
-            </button>
-            <div className="h-6 w-px bg-zinc-800"></div>
-            <div>
-              <h1 className="text-xl font-bold flex items-center gap-3">
-                <span className="text-blue-400">Live Leaderboard:</span>
-                <span className="text-white">{problem?.title}</span>
-              </h1>
-              <p className="text-zinc-500 font-mono text-xs mt-1 flex items-center gap-2">
-                Room Code:{" "}
-                <span className="text-white font-bold bg-zinc-800 px-2 py-0.5 rounded-md">
-                  {roomCode}
-                </span>
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCloseRoom}
-            className="text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-          >
-            End Classroom for All
-          </Button>
-        </header>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {room?.participants
-            ?.filter(
-              (p) =>
-                p &&
-                typeof p === "object" &&
-                p._id?.toString() !== currentUser?._id?.toString(),
-            )
-            .map((student) => {
-              const username = student?.username || "Unknown";
-              const currentStatus = liveStatuses[username] || "In Progress";
-              let statusState = "active"; // active, success, error
-              const lowerStatus = currentStatus.toLowerCase();
-              if (lowerStatus === "ac" || lowerStatus === "accepted") {
-                statusState = "success";
-              } else if (
-                currentStatus !== "In Progress" &&
-                currentStatus !== "Pending" &&
-                currentStatus !== "Executing"
-              ) {
-                statusState = "error";
-              }
-
-              return (
-                <div
-                  key={`${student._id}-${currentStatus}`}
-                  className={`bg-[#0a0a0a] border rounded-2xl p-6 relative overflow-hidden transition-all duration-300 shadow-lg ${
-                    statusState === "success"
-                      ? "border-green-500/30 hover:border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]"
-                      : statusState === "error"
-                        ? "border-red-500/30 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
-                        : "border-zinc-800/80 hover:border-blue-500/30"
-                  }`}
-                >
-                  {/* Background glow based on status */}
-                  <div
-                    className={`absolute -top-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-20 pointer-events-none transition-colors duration-1000 ${
-                      statusState === "success"
-                        ? "bg-green-500"
-                        : statusState === "error"
-                          ? "bg-red-500"
-                          : "bg-blue-500"
-                    }`}
-                  ></div>
-
-                  <div className="flex justify-between items-start mb-4 relative z-10">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg border ${
-                          statusState === "success"
-                            ? "bg-green-500/10 border-green-500/30 !text-green-500"
-                            : statusState === "error"
-                              ? "bg-red-500/10 border-red-500/30 !text-red-500"
-                              : "bg-zinc-800 border-zinc-700 text-zinc-300"
-                        }`}
-                      >
-                        {username.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <h3
-                          className="text-zinc-100 font-bold truncate max-w-[120px]"
-                          title={username}
-                        >
-                          {username}
-                        </h3>
-                        <p className="text-zinc-500 text-xs font-mono">User</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 relative z-10">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 block">
-                      Live Status
-                    </span>
-                    <div
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
-                        statusState === "success"
-                          ? "bg-green-500/10 border-green-500/20 !text-green-500"
-                          : statusState === "error"
-                            ? "bg-red-500/10 border-red-500/20 !text-red-500"
-                            : "bg-blue-500/10 border-blue-500/20 !text-blue-500"
-                      }`}
-                    >
-                      <div
-                        className={`w-2 h-2 rounded-full ${
-                          statusState === "success"
-                            ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"
-                            : statusState === "error"
-                              ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"
-                              : "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-pulse"
-                        }`}
-                      ></div>
-                      <span className="text-xs font-bold tracking-wide">
-                        {getFullStatus(currentStatus)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          {(!room?.participants || room.participants.length <= 1) && (
-            <div className="col-span-full py-20 flex flex-col items-center justify-center border border-zinc-800/50 rounded-2xl bg-[#0a0a0a] border-dashed">
-              <Spinner size="md" />
-              <p className="text-zinc-500 mt-4 text-sm font-medium">
-                Waiting for students to join...
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   // ==========================================
-  // --- VIEW 2: STUDENT VIEW (Full IDE) ---
+  // --- VIEW 2: CANDIDATE VIEW (Full IDE) ---
   // ==========================================
   return (
     <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
@@ -744,7 +584,7 @@ function IDE() {
               </span>
             </div>
           </div>
-          {roomCode && !isHost && (
+          {roomCode && !isInterviewer && (
             <Button
               variant="secondary"
               size="sm"
@@ -755,7 +595,7 @@ function IDE() {
                 setTimeout(() => navigate("/"), 1500);
               }}
             >
-              Exit Classroom
+              Exit Interview
             </Button>
           )}
           <Button
@@ -876,8 +716,16 @@ function IDE() {
                 C++ 17
               </span>
             </div>
-            <div className="flex-1 overflow-hidden">
-              <CodeEditor code={code} setCode={setCode} />
+            <div className="flex-1 bg-[#050505] overflow-hidden relative">
+              <CodeEditor 
+                code={code} 
+                setCode={setCode} 
+                language="cpp" 
+                roomCode={roomCode}
+                currentUser={currentUser}
+                isInterviewer={isInterviewer}
+                onMount={(editor) => monacoEditorRef.current = editor}
+              />
             </div>
           </div>
 
