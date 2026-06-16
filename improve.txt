@@ -1,358 +1,89 @@
 # CodeSpace — Improvement Backlog
 # Vision: Free, open-source technical interview platform (CoderPad alternative)
 # Pitch: "Run real coding interviews without paying $50/seat/month"
-# Last updated: June 11 2026
-#
-# ENGINE STATUS (executor.cpp — already production-quality):
-#   ✅ cgroups memory limit (--memory=256m --memory-swap=256m)
-#   ✅ --network none, --pids-limit=64, --cpus=0.5
-#   ✅ g++ -O2 -std=c++17, exit 124→TLE, exit 137→MLE
-#   ✅ std::bad_alloc→MLE, CE detection, nanosecond internal timing
-#   ✅ --rm --init (auto-cleanup)
+# Last updated: June 15 2026
 
 =============================================================
-ARCHITECTURE & REFACTORING PLAN (INTERVIEW PLATFORM PIVOT)
-=============================================================
-This section maps the "Classroom → Interview Platform" pivot to specific codebase changes required across the stack.
-
-[FRONTEND CHANGES]
-1. Dashboard.jsx
-   → Rename UI elements: "Host Classroom" → "Start Interview Session", "Join Classroom" → "Join Interview", "Classroom Code" → "Session Code".
-2. RoomDashboard.jsx (DEPRECATE)
-   → In an interview, the host doesn't need a grid view of 50 students. The host should be dropped directly into the IDE.
-   → Action: Delete RoomDashboard.jsx. Move its host-specific controls (e.g., "End Session") into a side-panel in IDE.jsx.
-3. IDE.jsx (THE CORE)
-   → Integrate Yjs (y-websocket) for true collaborative editing with multiple cursors.
-   → Add a WebRTC Video Panel alongside the code editor.
-   → Add an "Interviewer Mode" side-drawer to privately change the active problem or take notes.
-4. Auth Flow
-   → Candidates shouldn't need a registered account. Implement a guest-join flow where entering a name + session link grants a temporary JWT.
-
-[BACKEND CHANGES]
-1. Models (room.model.js → session.model.js)
-   → Remove 'participants' array and 'studentProgress' map (classroom concepts).
-   → Replace with: `interviewerId` (ObjectId), `candidateName` (String), `status` (Enum), `startTime`, `notes`.
-2. Controllers (room.controller.js)
-   → Refactor to support creating a 1:1 session and generating a shareable guest link.
-3. WebSockets (socketService.js)
-   → Remove 'leaderboard-update' and 'sync-entire-leaderboard'.
-   → Add Y-Websocket provider logic for CRDT syncing.
-   → Add WebRTC signaling listeners (offer, answer, ice-candidate) if using self-hosted video.
-
-[ENGINE CHANGES]
-1. Multi-language Support
-   → executor.cpp needs to accept a language flag and map to different Docker images (python, node, openjdk) instead of hardcoding g++.
-
-=============================================================
-TIER 1 — BUGS (fix before anything else)
+THE INTERVIEW PLATFORM PIVOT (CURRENT FOCUS)
 =============================================================
 
-✅ [BUG-1] Socket not initialized on direct login / silent token refresh
-→ Problem: socket.connect() only fires on explicit login. Hard refresh
-  while logged in → no socket.id → all room features broken.
-→ Fix: Call socket.connect() inside the JWT rehydration flow, not just
-  on login click. Guard every socket.emit() with:
-    if (!socket.connected) socket.connect()
-→ Status: ALREADY FIXED in IDE.jsx.
+[SOURCE CONTROL STRATEGY]
+This project is undergoing a massive architectural rewrite from V1 (Classroom) to V2 (Interview Platform).
+→ `main` branch: DO NOT use for active pivot development.
+→ `v1-classroom` branch: The perfectly stable, completed Classroom app. Use this branch ONLY if a critical bug fix needs to be deployed to the legacy app or if you need to demonstrate the old app.
+→ `v2-interview-pivot` branch: **Active Development Branch**. ALL work for the EPICS below must happen on this branch. We will merge back to `main` only when the V2 MVP is 100% complete and tested.
 
-✅ [BUG-2] Logout does not disconnect user from room
-→ Problem: Logout clears JWT but never emits a server disconnect.
-  Interviewer dashboard still shows candidate as active after logout.
-→ Fix: Before clearing JWT emit:
-    socket.emit("leave-room", { roomId, userId })
-    socket.disconnect()
-  Handle on server: remove user from room state immediately.
-→ Status: COMPLETED. Logout now emits leave-room properly.
+CodeSpace is pivoting from a 1-to-many "Classroom" tool to a 1-to-1 "Technical Interview" platform.
+To complete the MVP for the resume, the following features must be executed:
 
-✅ [BUG-3] Execution Worker Architecture (Decoupled by Design)
-→ Note: The C++ execution worker code exists at `backend/workers/jobworker.js` and is intentionally decoupled from `npm run dev`. This allows the worker to be scaled horizontally across multiple instances (e.g., in a separate EC2 cluster) to handle high load without choking the main Express/Socket server. 
-→ How to run locally: Open a second terminal and run `npm run worker`.
 
-=============================================================
-TIER 2 — PERFORMANCE
-=============================================================
 
-✅ [PERF-1 & PERF-8] Verdict latency 2.5s → target <500ms
-→ Problem: Frontend polls /submissions/status/:jobId via HTTP every 1.5s, triggering repeated MongoDB fetches (N+1 queries).
-  Unacceptable in a live interview — candidate and interviewer
-  both watching the screen waiting for result.
-→ Fix: Worker now emits verdict directly to Redis pub/sub. Frontend ripped out polling and listens to `socket.on("job-verdict")` via a subscription channel.
-→ Status: COMPLETED. HTTP polling eliminated. Sub-100ms real-time verdicts active.
-
-=============================================================
-TIER 3 — CORE INTERVIEW FEATURES (this is the product)
-=============================================================
-
-[CORE-1] Collaborative code editor (THE most critical feature)
-→ Problem: Currently only one person can edit. In a real interview,
-  both interviewer and candidate write in the same editor simultaneously.
-  This is the #1 feature CoderPad sells.
-→ Fix: Integrate Yjs (CRDT library) for conflict-free collaborative editing.
-  npm install yjs y-websocket
-  Sync document operations via Socket.io (y-socket.io provider).
-  Persist final document state to MongoDB on session end.
-  Both cursors visible with name labels (like Google Docs).
-→ Done when: Interviewer and candidate in same room → both type
-  simultaneously → no conflicts → each sees the other's cursor in <200ms.
-
-[CORE-2] Multi-language support (Python, Java, JavaScript)
-→ Problem: Currently only C++. Real interviews are language-agnostic.
-  A candidate should never be forced into C++ if they know Python.
-→ Fix: Add language selector dropdown in editor.
-  Pull Docker images: python:3.12-slim, openjdk:21-slim, node:20-slim.
-  Worker selects image + run command based on language field:
-    C++:    g++ -O2 -std=c++17 solution.cpp && ./solution
-    Python: python3 solution.py
-    Java:   javac Solution.java && java Solution
-    JS:     node solution.js
-  Same exit code → verdict mapping applies to all languages.
-→ Done when: Language dropdown works. Python/Java/JS code runs
-  correctly and gets right TLE/MLE/RE verdicts.
-
-[CORE-3] Video call (interviewer + candidate, in-browser)
-→ Problem: Right now interviewer and candidate need a separate Zoom
-  link. CoderPad has video built-in — that's the experience to match.
-→ Fix (Option A — faster): Embed a Daily.co or 100ms.live room iframe.
-  Free tier covers ~10,000 minutes/month. Zero WebRTC code to write.
-  Generate a unique room URL per interview session.
-→ Fix (Option B — self-hosted): Implement WebRTC peer-to-peer via
-  simple-peer library. Use your Socket.io server as the signaling server.
-  More work but no third-party dependency.
-  Recommendation: Start with Option A (Daily.co embed), migrate later.
-→ Done when: Interview session page has: code editor (left) +
-  video panel (right). One link, no Zoom needed.
-
-[CORE-4] Interview session management
-→ Problem: No concept of a structured "interview session" with a
-  candidate. Current "Host Room" is for classrooms, not interviews.
-→ Fix: New session model in MongoDB:
-  {
-    sessionId, interviewerId, candidateEmail,
-    scheduledAt, duration (90min default),
-    problem(s), status (pending/active/completed),
-    recordingUrl (future), verdict (hired/rejected/maybe)
-  }
-  Interviewer creates session → gets shareable link → sends to candidate.
-  Candidate clicks link → joins without needing to create an account.
-  Session auto-ends after duration. Final code snapshot saved.
-→ Done when: Interviewer creates session → shares link → candidate
-  joins as guest → session auto-saves code on end.
-
-[CORE-5] Problem bank with 1-Click Import & Custom Problems
-→ Problem: No problem library exists. Interviewers paste the question
-  in chat manually, which is unprofessional.
-→ Fix: Problem model in MongoDB:
-  { title, description, examples, constraints, difficulty, tags,
-    testCases: [{ input, expectedOutput }], solutionTemplate (per language) }
-  Interviewer can:
-   1. Pick from curated bank
-   2. Paste a LeetCode or Codeforces URL (Backend scrapes/imports the problem text + sample test cases automatically)
-   3. Create a custom problem from scratch
-  Problem shown in left panel, editor on right (standard interview layout).
-  Hidden test cases — candidate can't see expected output.
-→ Done when: Interviewer can import a problem via URL, pick from bank, or create a custom one, and the candidate sees the description panel.
-
-[CORE-6] Run against test cases during interview (not just free-run)
-→ Problem: Currently users run code with custom input only.
-  In a real interview, code should be tested against actual test cases
-  to give the candidate real feedback (like LC's "Run" button).
-→ Fix: Two buttons:
-  "Run" → execute against sample test cases, show input/output (fast feedback)
-  "Submit" → execute against all hidden test cases, show pass/fail count
-  Verdict: "Passed 4/5 test cases. Failed on: [input shown]"
-→ Done when: Run button shows sample case results. Submit button
-  shows full verdict with failing test case details.
-
-[CORE-7] Guest Auth Flow (Frictionless Onboarding)
-→ Problem: Candidates currently have to create an account with email/password to join a session. This is too much friction for an interview.
-→ Fix: Add a `guestJoinSession` endpoint in `user.controller.js`.
-  When a candidate enters their Name + Session Code on the landing page, generate a temporary JWT scoped strictly to that session.
+[FEAT-2] Session Data Model & Guest Auth Flow
+→ Problem: The current `Room` model is built for 50 students, and forces users to create an account to join.
+→ Architecture: 
+  1. Replace `room.model.js` with `session.model.js` (Interviewer, Candidate, Status, Code Snapshot).
+  2. Implement Guest Join: Interviewer sends a link -> Candidate enters name -> Receives scoped JWT -> Drops instantly into IDE.
 → Done when: A candidate can join an active interview session in under 3 seconds without a password.
 
+[FEAT-3] UI Overhaul: Dashboard to Interview View
+→ Problem: `RoomDashboard.jsx` shows a grid of student tiles. This is useless for a 1:1 interview.
+→ Architecture:
+  1. Delete `RoomDashboard.jsx`.
+  2. In `Dashboard.jsx`, rename "Host Classroom" to "Start Interview Session".
+  3. In `IDE.jsx`, add an "Interviewer Mode" side-panel (only visible to the host) to take private notes and change the active problem.
+
+[FEAT-4] Multi-language Support
+→ Problem: Currently only C++ is hardcoded.
+→ Architecture:
+  1. Pull Docker images: `python:3.12-slim`, `openjdk:21-slim`, `node:20-slim`.
+  2. Worker selects image + run command based on a new language dropdown in the editor.
+
+[FEAT-5] Problem Bank & Test Case Runner
+→ Problem: Interviewers paste questions in chat. Submissions only run against custom input.
+→ Architecture:
+  1. `Problem` model in MongoDB with hidden test cases.
+  2. "Run" button executes sample cases. "Submit" executes all hidden cases and returns pass/fail metrics.
+
+[FEAT-6] Built-in Video Call
+→ Problem: Requires a separate Zoom link.
+→ Architecture: Embed a Daily.co iframe into a resizable side panel next to the code editor.
+
 =============================================================
-TIER 4 — RELIABILITY & DEVOPS
+RELIABILITY & ENGINE POLISH
 =============================================================
 
 [OPS-1] Rate limiting on execution endpoint
 → Per-user limit: 10 runs/minute via Redis token bucket.
-  Exceeding → HTTP 429 with Retry-After header.
-→ Done when: Rapid submissions get 429. Other users unaffected.
-
-[OPS-2] GitHub Actions CI/CD & Automated Testing
-→ Push to main → run test suites → auto-deploy to EC2 → PM2 reload.
-  No manual SSH needed.
-→ Include automated tests in the pipeline to measure key metrics:
-  - Submission response time
-  - Code execution result turnaround time
-→ Done when: git push → tests pass → live in 2 minutes automatically.
-
-[OPS-3] Load & Stress Testing
-→ Setup automated stress testing (e.g. using Artillery or k6) to measure
-  the maximum number of concurrent users and WebSocket connections the
-  system can handle before degrading.
-→ Done when: We have a documented benchmark of peak concurrent users and
-  identifiable bottlenecks.
-
-=============================================================
-TIER 5 — ENGINE POLISH
-=============================================================
 
 [ENGINE-1] Specific RE subtypes (SIGSEGV / SIGABRT / SIGFPE)
 → Map exit 139→SIGSEGV, 134→SIGABRT, 136→SIGFPE in executor.cpp.
-→ Done when: Null pointer → "Segmentation Fault", not generic "RE".
-
-[ENGINE-2] Separate stdout from stderr in verdict payload
-→ Redirect stderr to separate file. CE shows only compiler error.
-→ Done when: CE message clean, no mixing with program output.
 
 =============================================================
-TIER 6 — ADVANCED FEATURES (after core product ships)
+DOCUMENTATION
 =============================================================
 
-[ADV-1] Session Playback (The "Killer Feature")
-→ Record the full session: code diffs over time (CRDT logs) + websocket events.
-  Store code snapshots every 30s in MongoDB with timestamps.
-  Playback scrubber shows the hiring committee what the candidate typed and when.
-
-[ADV-2] Collaborative Whiteboard (System Design)
-→ SDE interviews often have a System Design / LLD round.
-  Embed Excalidraw or tldraw directly into a tab next to the code editor.
-  Sync the drawing state over our existing Socket.io connection.
-
-[ADV-3] Question Bank / Snippet Injector
-→ Interviewer picks role/topic from a dropdown (e.g., "LRU Cache").
-  Selecting one instantly injects the markdown description and boilerplate code
-  into the room for both users.
-
-[ADV-4] Interviewer Private Notes Panel
-→ A sliding side-panel (only visible to isHost === true) for rich text notes.
-  The interviewer can write observations without the candidate seeing it.
-  Notes are saved to the session schema in MongoDB when the interview ends.
-
-[ADV-5] "Hard Mode" / IntelliSense Toggle
-→ Add a toggle for the Host to disable Monaco's autocomplete and syntax
-  highlighting for the candidate in real-time via a WebSocket event
-  (`socket.emit("toggle-intellisense", false)`).
-
-[ADV-6] Candidate feedback report
-→ After session: auto-generate report with:
-  problems attempted, pass rate, time taken, language used,
-  number of runs before AC, interviewer notes, overall verdict.
-  Shareable PDF for the hiring team.
+[DOCS-1] Rewrite README for Interview Pivot
+→ Update header positioning.
+→ Update Architecture Diagram to show Yjs CRDT + Redis Pub/Sub.
+→ Add System Design notes explaining WHY Docker cgroups, WHY exit codes over stdout, WHY Socket.io over raw WS.
 
 =============================================================
-EXECUTION ORDER
+TECH DEBT (Low Priority)
 =============================================================
-
-Phase 1 (Now):       BUG-1 → BUG-2 → BUG-3
-Phase 2 (Week 2):    PERF-1 → OPS-1 → OPS-2
-Phase 3 (Week 3-4):  CORE-1 (collab editor — Yjs) ← most important
-Phase 4 (Week 5):    CORE-2 (multi-language) → CORE-4 (session management)
-Phase 5 (Week 6):    CORE-5 (problem bank) → CORE-6 (test case runner)
-Phase 6 (Week 7):    CORE-3 (video call — Daily.co embed)
-Phase 7 (Later):     ENGINE-1 → ENGINE-2 → ADV-1 → ADV-2 → ADV-3 → ADV-4
-
-MVP (ship after Phase 6):
-  Collab editor + video + multi-language + session link + problem bank
-  = a complete, usable interview platform. Better than Zoom + Google Docs.
-  On par with CoderPad basic tier. Free.
-
-
-=============================================================
-DOCS — README must be updated to reflect interview platform pivot
-=============================================================
-
-[DOCS-1] HLD + Architecture decisions in README
-→ Problem: Current README describes CodeSpace as a 'classroom tool'.
-  After the pivot to an interview platform, the README is out of date
-  and doesn't explain WHY the technical choices were made.
-→ What to write (in this order):
-
-  1. New positioning (update header)
-     "Free, open-source technical interview platform. Run coding interviews
-     without paying $50/seat/month. Real-time collaborative editor,
-     built-in video, multi-language execution."
-
-  2. System Architecture Diagram (Mermaid) — already in README, update it
-     Add: Interviewer → creates session → shareable link → Candidate joins
-     → Yjs CRDT syncs editor state → both submit code → execution engine
-     → verdict via Socket.io → interviewer sees result in real-time
-
-  3. Key Design Decisions
-
-     Decision 1 — Why Docker with cgroups flags vs raw Linux primitives?
-     → "LeetCode uses raw cgroups + seccomp + namespaces (no Docker) for
-       minimum latency. We use Docker with --memory=256m, --network none,
-       --pids-limit=64 which internally uses the same kernel primitives.
-       Docker adds ~800ms cold start but eliminates the complexity of
-       writing raw clone()/seccomp() syscalls. Acceptable tradeoff for
-       an interview platform where execution is not the bottleneck."
-
-     Decision 2 — Why exit code mapping for verdicts (not stdout parsing)?
-     → "SIGSEGV=139, SIGABRT=134, SIGFPE=136, TLE=124, MLE=137.
-       Reading the OS exit code is the same mechanism the Linux kernel
-       and real judges (Codeforces, LeetCode) use. Parsing stdout for
-       error strings is brittle — a user's code could print 'error:'
-       and fool the judge. Exit codes cannot be faked by user code."
-
-     Decision 3 — Why Upstash Redis (serverless) vs self-hosted Redis?
-     → "Self-hosted Redis on EC2 requires managing persistence, replication,
-       and memory tuning. Upstash is serverless Redis — zero ops, free tier,
-       connection-pooling built-in. For a queue that handles bursts of
-       submissions but is idle most of the time, pay-per-request pricing
-       is far cheaper than a dedicated instance."
-
-     Decision 4 — Why Socket.io over raw WebSocket?
-     → "Raw WebSocket has no reconnection logic, no room/namespace concept,
-       and no fallback to HTTP long-polling. Socket.io gives: automatic
-       reconnect, pub/sub rooms (interview sessions), and HTTP polling
-       fallback for corporate networks that block WS. The overhead (~2KB
-       client bundle) is negligible for an interview tool."
-
-     Decision 5 — Why Nginx for WebSocket upgrades?
-     → "AWS EC2 doesn't natively handle WebSocket upgrades. Nginx
-       intercepts the Socket.io HTTP polling handshake and injects
-       'Connection: Upgrade' + 'Upgrade: websocket' headers, converting
-       it to a persistent wss:// tunnel. Without this, Socket.io falls
-       back to HTTP polling — 3-5x more latency, kills the real-time feel."
-
-     Decision 6 — Why Yjs (CRDT) for collaborative editing? (planned)
-     → "Operational Transforms (OT, used by Google Docs) require a central
-       server to serialize all operations. CRDTs (Conflict-free Replicated
-       Data Types) allow peers to merge edits locally without coordination.
-       Yjs is the most mature JS CRDT library, supports CodeMirror/Monaco
-       bindings, and syncs over any transport (Socket.io in our case)."
-
-  4. Why this beats the current alternative (Zoom + Google Docs)
-     → No code execution | No syntax highlighting | No real-time verdict
-     → Candidate must share screen | Interviewer can't run the code
-     → CodeSpace: single link, both edit, both see verdict, no plugins needed
-
-  5. Execution order for interview platform features (roadmap)
-
-→ Done when: README tells the full pivot story. Link it in resume under
-  'Technical Interview Platform' not 'classroom tool'.
-
-=============================================================
-TIER 4 — ARCHITECTURAL AUDIT FINDINGS (Code Quality)
-=============================================================
-
-✅ [BUG-8] Missing WebSocket Error Boundaries
-→ Problem: `socketService.js` makes asynchronous database calls (`await Room.findOne()`) inside the `socket.on("join-room")` event without a `try/catch` block. If the MongoDB query fails, the promise rejection is unhandled and can crash the WebSocket service.
-→ Status: COMPLETED. Async handlers safely wrapped.
-
-✅ [PERF-6] Synchronous File I/O in Worker
-→ Problem: `jobworker.js` uses synchronous methods (`fs.existsSync`, `fs.writeFileSync`, `fs.unlinkSync`) inside `runCpp()`. Because Node is single-threaded, these blocking operations freeze the event loop, preventing the worker from picking up new jobs from Redis simultaneously.
-→ Status: COMPLETED. Refactored to `fs.promises`.
 
 [PERF-7] Redundant N+1 Queries on Registration
-→ Problem: `user.controller.js` executes 4 sequential database queries for a single user registration (`User.create()`, followed by `User.findById()`, then another `findById` inside token generation, and finally a `.save()`).
-→ Fix: Refactor the controller and the token generation methods to operate on the active Mongoose document in memory without refetching from the database.
-
-✅ [PERF-8] Aggressive N+1 Polling vs WebSockets
-→ Problem: `IDE.jsx` aggressively polls the backend every 1.5s via HTTP (`api.get('/submissions/status')`) while code is executing, triggering repeated `Submission.findById()` queries.
-→ Status: COMPLETED. Replaced with Redis Pub/Sub.
+→ `user.controller.js` executes 4 sequential database queries for a single user registration. Refactor to use active Mongoose document in memory.
 
 [CLEAN-3] Unnecessary DB Query in Loop
-→ Problem: `room.controller.js` runs `await Room.findOne()` inside a loop to randomly generate a unique room code.
-→ Fix: This creates sequential network bottlenecks. Use a robust unique ID generator (like `nanoid` or `uuid`) and rely on MongoDB's unique index constraint (`catch (err.code === 11000)`) instead of checking-before-inserting.
+→ `room.controller.js` runs `await Room.findOne()` inside a loop. Use `nanoid` and MongoDB unique index instead.
+
+=============================================================
+COMPLETED ARCHIVE
+=============================================================
+✅ [FEAT-1] Collaborative Code Editor (Yjs) implemented successfully with real-time neon name tags and conflict-free cursor syncing.
+✅ [BUG-1] Socket initialized properly on JWT rehydration.
+✅ [BUG-2] Ghost user bug fixed; logout now explicitly emits "leave-room".
+✅ [BUG-3] Execution Worker architectural decoupling correctly implemented.
+✅ [BUG-8] Missing WebSocket Error Boundaries wrapped in try/catch.
+✅ [PERF-1 / PERF-8] 1.5s HTTP Polling eliminated. Replaced with instant Redis Pub/Sub WebSockets (<100ms latency).
+✅ [PERF-6] Synchronous File I/O in Worker refactored to fs.promises to unblock event loop.
