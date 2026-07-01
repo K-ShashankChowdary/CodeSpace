@@ -93,11 +93,11 @@ function IDE() {
           if (sessionCode) {
             const sessRes = await api.get(`/sessions/details/${activeRoomCode}`);
             const sess = sessRes.data.data;
-            // Normalize session shape to match what socket handlers expect
             roomData = {
               ...sess,
               roomCode: sess.sessionCode,
               interviewer: sess.interviewer,
+              problems: sess.problemIds || [],
               participants: [],
             };
           } else {
@@ -231,8 +231,18 @@ function IDE() {
       }, 3000);
     };
 
+    const handleForceNavigate = (newProblemId) => {
+      showToast("Interviewer moved to another problem. Syncing...", "info", 2000);
+      navigate(`/problem/${newProblemId}?session=${activeRoomCode}`);
+    };
+
     socket.on("room-closed", handleRoomClosed);
-    return () => socket.off("room-closed", handleRoomClosed);
+    socket.on("force-navigate-problem", handleForceNavigate);
+    
+    return () => {
+      socket.off("room-closed", handleRoomClosed);
+      socket.off("force-navigate-problem", handleForceNavigate);
+    };
   }, [isInterviewer, activeRoomCode, navigate]);
 
   // Sync ref for polling and auto-fetch history
@@ -268,7 +278,22 @@ function IDE() {
 
     socket.on("job-verdict", handleJobVerdict);
     return () => socket.off("job-verdict", handleJobVerdict);
-  }, [activeRoomCode, currentUser, id]);
+  }, [id, activeRoomCode, currentUser]);
+
+  const handleCloseRoom = async () => {
+    if (window.confirm("Are you sure you want to end this interview for all participants?")) {
+      try {
+        await api.post(`/sessions/close/${activeRoomCode}`);
+        if (!socket.connected) socket.connect();
+        socket.emit("interviewer-closed-room", activeRoomCode);
+        showToast("Interview ended successfully", "success");
+        navigate("/");
+      } catch (err) {
+        console.error(err);
+        showToast("Failed to close interview", "error");
+      }
+    }
+  };
 
   const fetchHistory = async () => {
     try {
@@ -533,19 +558,16 @@ function IDE() {
         <div className="flex items-center gap-6">
           <button
             onClick={() => {
-              if (activeRoomCode) {
-                navigate(`/room/${activeRoomCode}`);
-                return;
-              }
               navigate("/");
             }}
-            className="flex items-center gap-2 group text-zinc-500 hover:text-white transition-colors"
+            className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors group"
           >
-            <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:bg-zinc-800 group-hover:border-zinc-700 transition-all">
+            <div className="w-8 h-8 rounded-lg bg-zinc-800/50 flex items-center justify-center border border-zinc-700/50 group-hover:bg-zinc-700 transition-colors">
               <svg
-                className="w-4 h-4"
-                fill="none"
+                width="14"
+                height="14"
                 viewBox="0 0 24 24"
+                fill="none"
                 stroke="currentColor"
               >
                 <path
@@ -557,14 +579,33 @@ function IDE() {
               </svg>
             </div>
             <span className="text-[10px] font-bold uppercase tracking-widest">
-              {activeRoomCode ? "Return to Room" : "Dashboard"}
+              Dashboard
             </span>
           </button>
           <div className="h-4 w-px bg-zinc-800"></div>
           <div className="flex flex-col justify-center">
-            <h1 className="text-sm font-black text-white tracking-tight flex items-center gap-3">
-              {problem?.title || "Problem"}
-            </h1>
+            {isInterviewer && room?.problems?.length > 1 ? (
+              <select
+                value={id}
+                onChange={(e) => {
+                  const newId = e.target.value;
+                  if (!socket.connected) socket.connect();
+                  socket.emit("interviewer-changed-problem", { roomCode: activeRoomCode, problemId: newId });
+                  navigate(`/problem/${newId}?session=${activeRoomCode}`);
+                }}
+                className="text-sm font-black text-white tracking-tight bg-zinc-900 border border-zinc-700 rounded px-2 py-1 outline-none focus:border-blue-500 transition-all cursor-pointer max-w-[200px] truncate"
+              >
+                {room.problems.map(p => (
+                  <option key={p._id} value={p._id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <h1 className="text-sm font-black text-white tracking-tight flex items-center gap-3 truncate max-w-[200px]">
+                {problem?.title || "Problem"}
+              </h1>
+            )}
             <div className="flex items-center gap-2 mt-0.5">
               <span
                 className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md border ${
@@ -644,6 +685,16 @@ function IDE() {
                 ))
               )}
             </div>
+          )}
+          {activeRoomCode && isInterviewer && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleCloseRoom}
+              className="!bg-red-500/10 !text-red-500 !border-red-500/20 hover:!bg-red-500/20"
+            >
+              End Interview
+            </Button>
           )}
           {activeRoomCode && !isInterviewer && (
             <Button

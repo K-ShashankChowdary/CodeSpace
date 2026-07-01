@@ -24,20 +24,20 @@ function GuestJoin() {
         name: trimmedName,
         sessionCode,
       });
-      const { guestToken, firstProblemId, sessionCode: code } = res.data.data;
-
-      // Store guest token so api.js interceptor can attach it as Authorization header
+      const { guestToken, activeProblem } = res.data.data;
+      
       localStorage.setItem("guestToken", guestToken);
       // Remove any regular access token to avoid conflicts
       localStorage.removeItem("accessToken");
-
-      if (!firstProblemId) {
-        setError("No problem assigned to this session yet.");
+      
+      if (!activeProblem) {
+        setError("No active problem found in this session.");
         setIsLoading(false);
         return;
       }
-
-      navigate(`/problem/${firstProblemId}?session=${code}`);
+      
+      // Navigate directly to the active problem in the session
+      navigate(`/problem/${activeProblem}?session=${sessionCode}`);
     } catch (err) {
       setError(
         err.response?.data?.message || "Failed to join session. Check the invite link."

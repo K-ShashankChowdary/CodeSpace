@@ -457,7 +457,7 @@ function Dashboard() {
               </button>
               <button
                 id="enter-interview-room"
-                onClick={() => { setInviteLink(null); navigate(`/room/${createdRoomCode}`); }}
+                onClick={() => { setInviteLink(null); navigate(`/problem/${selectedProblems[0]}?session=${createdRoomCode}`); }}
                 className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-black uppercase tracking-widest transition-all"
               >
                 Enter Room →

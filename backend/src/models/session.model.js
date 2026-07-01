@@ -31,6 +31,11 @@ const sessionSchema = new Schema(
                 ref: "Problem",
             },
         ],
+        activeProblem: {
+            type: Schema.Types.ObjectId,
+            ref: "Problem",
+            default: null,
+        },
         // Periodically snapshotted for resume-on-reload (future use)
         codeSnapshot: {
             type: String,

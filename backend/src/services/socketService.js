@@ -176,6 +176,18 @@ export const initializeSockets = (httpServer) => {
       }
     });
 
+    socket.on("interviewer-changed-problem", async ({ roomCode, problemId }) => {
+      if (socket.data.isInterviewer) {
+        try {
+          const { Session } = await import("../models/session.model.js");
+          await Session.updateOne({ sessionCode: roomCode }, { activeProblem: problemId });
+          socket.to(roomCode).emit("force-navigate-problem", problemId);
+        } catch (error) {
+          console.error("Failed to sync problem change:", error);
+        }
+      }
+    });
+
     // CANDIDATE LEAVING LOGIC
     socket.on("disconnect", () => {
       const { roomCode, userId, username, isInterviewer } = socket.data;

@@ -36,6 +36,7 @@ const createSession = asyncHandler(async (req, res) => {
         sessionCode,
         interviewer: req.user._id,
         problemIds,
+        activeProblem: problemIds[0],
         status: "waiting",
     });
 
@@ -46,6 +47,7 @@ const createSession = asyncHandler(async (req, res) => {
             // Frontend constructs the full invite URL using this code
             inviteLink: `/join/${session.sessionCode}`,
             problemIds: session.problemIds,
+            activeProblem: session.activeProblem,
         }, "Session created successfully")
     );
 });
@@ -94,15 +96,14 @@ const guestJoin = asyncHandler(async (req, res) => {
     session.startedAt = session.startedAt || new Date();
     await session.save();
 
-    // Return the guest token and the first problem to navigate to
+    // Return the guest token and the active problem to navigate to
     return res.status(200).json(
         new ApiResponse(200, {
             guestToken,
             sessionCode: session.sessionCode,
             sessionId: session._id,
             candidateName,
-            // Guest lands on the first problem in the session
-            firstProblemId: session.problemIds[0] || null,
+            activeProblem: session.activeProblem || session.problemIds[0],
             problemIds: session.problemIds,
         }, "Joined session successfully")
     );
