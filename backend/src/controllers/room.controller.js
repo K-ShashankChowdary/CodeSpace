@@ -42,12 +42,27 @@ const joinRoom = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Please provide a valid interview room code");
     }
 
-    const room = await Room.findOne({ 
+    let room = await Room.findOne({ 
         roomCode: roomCode.trim().toUpperCase(), 
         isActive: true 
     });
 
     if (!room) {
+        // Fallback: Check if it's a 1:1 Session code instead of a multi-user Room
+        const { Session } = await import("../models/session.model.js");
+        const session = await Session.findOne({
+            sessionCode: roomCode.trim().toUpperCase(),
+            status: { $in: ["waiting", "active"] }
+        });
+
+        if (session) {
+            // For a logged-in user joining a Session, they are a candidate.
+            // If they are the interviewer, they don't need to 'join' this way, but if they do, it's fine.
+            return res.status(200).json(
+                new ApiResponse(200, { roomCode: session.sessionCode }, "Joined session successfully")
+            );
+        }
+
         throw new ApiError(404, "This interview room does not exist or has been closed");
     }
 

@@ -88,14 +88,18 @@ export const initializeSockets = (httpServer) => {
 
         if (!entity) {
           const { Session } = await import("../models/session.model.js");
-          entity = await Session.findOne({ sessionCode: roomCode, status: "Active" }).populate(
-            "candidate",
-            "username"
-          );
+          // Allow joining both 'waiting' and 'active' sessions. 
+          entity = await Session.findOne({ 
+            sessionCode: roomCode, 
+            status: { $in: ["waiting", "active"] } 
+          }).populate("candidate", "username");
           isSession = true;
         }
 
-        if (!entity) return;
+        if (!entity) {
+          console.warn(`[Socket] Room/Session not found for code: ${roomCode}`);
+          return;
+        }
 
         const isInterviewer = entity.interviewer.toString() === socket.data.userId.toString();
         socket.data.isInterviewer = isInterviewer;
@@ -129,7 +133,10 @@ export const initializeSockets = (httpServer) => {
 
         if (!entity) {
           const { Session } = await import("../models/session.model.js");
-          entity = await Session.findOne({ sessionCode: roomCode, status: "Active" });
+          entity = await Session.findOne({ 
+            sessionCode: roomCode, 
+            status: { $in: ["waiting", "active"] } 
+          });
           isSession = true;
         }
         if (!entity) return;
