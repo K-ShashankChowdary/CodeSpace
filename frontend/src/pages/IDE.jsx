@@ -227,7 +227,12 @@ function IDE() {
     const handleRoomClosed = () => {
       showToast("The interviewer has closed the session. Exiting...", "error", 3000);
       setTimeout(() => {
-        navigate("/");
+        if (currentUser?.isGuest) {
+          localStorage.removeItem("guestToken");
+          navigate("/auth");
+        } else {
+          navigate("/");
+        }
       }, 3000);
     };
 
@@ -243,7 +248,7 @@ function IDE() {
       socket.off("room-closed", handleRoomClosed);
       socket.off("force-navigate-problem", handleForceNavigate);
     };
-  }, [isInterviewer, activeRoomCode, navigate]);
+  }, [isInterviewer, activeRoomCode, navigate, currentUser]);
 
   // Sync ref for polling and auto-fetch history
   useEffect(() => {
