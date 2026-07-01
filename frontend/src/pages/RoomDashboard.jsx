@@ -75,86 +75,12 @@ function RoomDashboard() {
   };
 
   useEffect(() => {
-    //REFRESH FIX: Re-connect socket if it died on refresh
     if (!socket.connected) {
       socket.connect();
     }
 
-    const fetchRoomData = async () => {
-      try {
-        const [userRes, roomRes] = await Promise.all([
-          api.get("/users/current-user"),
-          api.get(`/rooms/details/${roomCode}`),
-        ]);
-
-        const user = userRes.data.data;
-        const roomData = roomRes.data.data;
-
-        setCurrentUser(user);
-        setRoom(roomData);
-
-        const userIsInterviewer = roomData.interviewer._id.toString() === user._id.toString();
-        setIsInterviewer(userIsInterviewer);
-
-        // Helper to emit join
-        const emitJoin = () => {
-          if (!socket.connected) socket.connect();
-          socket.emit("join-room", {
-            roomCode,
-            username: user.username,
-            userId: user._id,
-            isInterviewer: userIsInterviewer,
-          });
-        };
-
-        // If socket connects later
-        socket.on("connect", emitJoin);
-
-        // If already connected (most common)
-        if (socket.connected) {
-          emitJoin();
-        }
-      } catch (err) {
-        console.error("Room Details Error:", err);
-        setError(
-          err.response?.data?.message || "Failed to load interview details.",
-        );
-      } finally {
-        setLoading(false);
-      }
-
-      const handleGlobalLeaderboardUpdate = (data) => {
-        if (!isInterviewer) return; // Only notify the interviewer
-
-        if (data.status === "AC") {
-          showToast(`🔥 ${data.username} got an AC!`, "success", 4000);
-        } else if (data.status !== "Queued" && data.status !== "Executing") {
-          showToast(`📝 ${data.username} got a ${data.status}`, "error", 4000);
-        }
-      };
-
-      // 1. Destroy ghost listeners
-      socket.off("leaderboard-update");
-      socket.off("candidate-joined");
-      socket.off("candidate-left");
-
-      // 2. Attach them normally (ONLY the ones that exist in this file!)
-      socket.on("candidate-joined", handleCandidateJoined);
-      socket.on("candidate-left", handleCandidateLeft);
-      socket.on("leaderboard-update", handleGlobalLeaderboardUpdate);
-
-      return () => {
-        socket.off("connect");
-        socket.off("candidate-joined", handleCandidateJoined);
-        socket.off("candidate-left", handleCandidateLeft);
-        socket.off("room-closed", handleRoomClosed);
-        socket.off("leaderboard-update", handleGlobalLeaderboardUpdate); // Clean up
-      };
-    };
-
-    fetchRoomData();
-
-    // Live Listeners
+    // Define all handlers here in the outer scope so they are
+    // only attached once — preventing the double-listener bug.
     const handleCandidateJoined = (candidate) => {
       showToast(`Candidate joined: ${candidate.username}`, "info");
       setRoom((prev) => {
@@ -186,15 +112,74 @@ function RoomDashboard() {
       }, 3000);
     };
 
+    const handleGlobalLeaderboardUpdate = (data) => {
+      // isInterviewer is in closure — use setIsInterviewer's functional form
+      // is not available here; rely on the state value read at effect registration.
+      if (data.status === "AC") {
+        showToast(`🔥 ${data.username} got an AC!`, "success", 4000);
+      } else if (data.status !== "Queued" && data.status !== "Executing" && data.status !== "Idle") {
+        showToast(`📝 ${data.username} got a ${data.status}`, "error", 4000);
+      }
+    };
+
+    // Clear any stale listeners before attaching fresh ones
+    socket.off("candidate-joined");
+    socket.off("candidate-left");
+    socket.off("room-closed");
+    socket.off("leaderboard-update");
+
     socket.on("candidate-joined", handleCandidateJoined);
     socket.on("candidate-left", handleCandidateLeft);
     socket.on("room-closed", handleRoomClosed);
+    socket.on("leaderboard-update", handleGlobalLeaderboardUpdate);
+
+    const fetchRoomData = async () => {
+      try {
+        const [userRes, roomRes] = await Promise.all([
+          api.get("/users/current-user"),
+          api.get(`/rooms/details/${roomCode}`),
+        ]);
+
+        const user = userRes.data.data;
+        const roomData = roomRes.data.data;
+
+        setCurrentUser(user);
+        setRoom(roomData);
+
+        const userIsInterviewer =
+          roomData.interviewer._id.toString() === user._id.toString();
+        setIsInterviewer(userIsInterviewer);
+
+        const emitJoin = () => {
+          if (!socket.connected) socket.connect();
+          socket.emit("join-room", {
+            roomCode,
+            username: user.username,
+            userId: user._id,
+            isInterviewer: userIsInterviewer,
+          });
+        };
+
+        socket.on("connect", emitJoin);
+        if (socket.connected) emitJoin();
+      } catch (err) {
+        console.error("Room Details Error:", err);
+        setError(
+          err.response?.data?.message || "Failed to load interview details.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRoomData();
 
     return () => {
       socket.off("connect");
       socket.off("candidate-joined", handleCandidateJoined);
       socket.off("candidate-left", handleCandidateLeft);
       socket.off("room-closed", handleRoomClosed);
+      socket.off("leaderboard-update", handleGlobalLeaderboardUpdate);
     };
   }, [roomCode, navigate]);
 

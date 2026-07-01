@@ -584,6 +584,34 @@ function IDE() {
               </span>
             </div>
           </div>
+          {/* Interviewer-only: live candidate status for this problem */}
+          {roomCode && isInterviewer && (
+            <div className="flex items-center gap-2 bg-zinc-900/50 px-3 py-1.5 rounded-lg border border-zinc-800/60 shadow-inner">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                Candidate
+              </span>
+              {Object.keys(liveStatuses).length === 0 ? (
+                <span className="text-[10px] text-zinc-600 font-mono">—</span>
+              ) : (
+                Object.entries(liveStatuses).map(([username, st]) => (
+                  <div key={username} className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-400 font-bold">{username}</span>
+                    <span
+                      className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${
+                        st === "AC"
+                          ? "bg-green-500/10 border-green-500/20 text-green-400"
+                          : ["WA", "TLE", "CE", "RE", "MLE"].includes(st)
+                          ? "bg-red-500/10 border-red-500/20 text-red-400"
+                          : "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                      }`}
+                    >
+                      {st}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
           {roomCode && !isInterviewer && (
             <Button
               variant="secondary"
