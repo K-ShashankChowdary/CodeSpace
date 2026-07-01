@@ -53,16 +53,22 @@ function Dashboard() {
     fetchProblems();
   }, []);
 
+  // Invite link shown after session creation
+  const [inviteLink, setInviteLink] = useState(null);
+  const [createdRoomCode, setCreatedRoomCode] = useState(null);
+
   const handleCreateRoom = async () => {
     if (selectedProblems.length === 0) return;
     setIsCreatingRoom(true);
     try {
-      const res = await api.post("/rooms/create", { problems: selectedProblems });
-      const { roomCode } = res.data.data;
-      navigate(`/room/${roomCode}`);
+      const res = await api.post("/sessions/create", { problemIds: selectedProblems });
+      const { sessionCode, inviteLink: link } = res.data.data;
+      setCreatedRoomCode(sessionCode);
+      setInviteLink(`${window.location.origin}${link}`);
+      setIsModalOpen(false);
     } catch (error) {
-      console.error("Room creation failed:", error);
-      showToast(error.response?.data?.message || "Failed to create room", "error");
+      console.error("Session creation failed:", error);
+      showToast(error.response?.data?.message || "Failed to create session", "error");
     } finally {
       setIsCreatingRoom(false);
     }
@@ -408,6 +414,57 @@ function Dashboard() {
           type={toast.type} 
           onClose={() => setToast(null)} 
         />
+      )}
+
+      {/* Invite Link Panel — shown after session creation */}
+      {inviteLink && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-[#0d0d0d] border border-zinc-800/60 rounded-2xl p-8 max-w-lg w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-green-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-white tracking-tight">Session Created</h2>
+                <p className="text-xs text-zinc-500 font-mono tracking-widest">Code: {createdRoomCode}</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-zinc-400 mb-4">
+              Share this link with your candidate. They can join without creating an account.
+            </p>
+
+            <div className="flex items-center gap-2 bg-[#1a1a1a] border border-zinc-700/60 rounded-xl px-4 py-3 mb-6">
+              <span className="text-xs text-blue-400 font-mono truncate flex-1">{inviteLink}</span>
+              <button
+                id="copy-invite-link"
+                onClick={() => {
+                  navigator.clipboard.writeText(inviteLink);
+                  showToast("Invite link copied!", "success");
+                }}
+                className="text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg transition-all shrink-0"
+              >
+                Copy
+              </button>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setInviteLink(null); setCreatedRoomCode(null); }}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600 text-sm font-bold transition-all"
+              >
+                Stay Here
+              </button>
+              <button
+                id="enter-interview-room"
+                onClick={() => { setInviteLink(null); navigate(`/room/${createdRoomCode}`); }}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-black uppercase tracking-widest transition-all"
+              >
+                Enter Room →
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

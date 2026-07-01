@@ -14,6 +14,9 @@ function IDE() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const roomCode = searchParams.get("room");
+  const sessionCode = searchParams.get("session"); // guest join param
+  // Use whichever context param is present (session takes priority for guests)
+  const activeRoomCode = sessionCode || roomCode;
   const navigate = useNavigate();
 
   // Classroom State
@@ -58,29 +61,60 @@ function IDE() {
     }
     const fetchWorkspaceData = async () => {
       try {
-        const userRes = await api.get("/users/current-user");
-        const user = userRes.data.data;
+        let user;
+        const guestToken = localStorage.getItem("guestToken");
+
+        if (guestToken) {
+          // Guest user — decode name from JWT payload (no DB call needed)
+          try {
+            const payload = JSON.parse(atob(guestToken.split(".")[1]));
+            user = {
+              _id: null,
+              username: payload.name,
+              isGuest: true,
+            };
+          } catch {
+            localStorage.removeItem("guestToken");
+            navigate("/auth");
+            return;
+          }
+        } else {
+          const userRes = await api.get("/users/current-user");
+          user = userRes.data.data;
+        }
         setCurrentUser(user);
 
         const probRes = await api.get(`/problems/${id}`);
         setProblem(probRes.data.data || null);
 
-        if (roomCode) {
-          const roomRes = await api.get(`/rooms/details/${roomCode}`);
-          const roomData = roomRes.data.data;
+        if (activeRoomCode) {
+          // Fetch from /sessions/details if it's a guest session, else /rooms/details
+          let roomData;
+          if (sessionCode) {
+            const sessRes = await api.get(`/sessions/details/${activeRoomCode}`);
+            const sess = sessRes.data.data;
+            // Normalize session shape to match what socket handlers expect
+            roomData = {
+              ...sess,
+              roomCode: sess.sessionCode,
+              interviewer: sess.interviewer,
+              participants: [],
+            };
+          } else {
+            const roomRes = await api.get(`/rooms/details/${activeRoomCode}`);
+            roomData = roomRes.data.data;
+          }
           setRoom(roomData);
 
-          //Convert both IDs to strings before comparing to prevent UI swapping
-          const interviewerId = roomData.interviewer._id.toString();
-          const currentUserId = user._id.toString();
-          const userIsInterviewer = interviewerId === currentUserId;
-
+          const interviewerId = roomData.interviewer._id?.toString();
+          const currentUserId = user._id?.toString();
+          const userIsInterviewer = !user.isGuest && interviewerId === currentUserId;
           setIsInterviewer(userIsInterviewer);
 
           const emitJoinRoom = () => {
             if (!socket.connected) socket.connect();
             socket.emit("join-room", {
-              roomCode,
+              roomCode: activeRoomCode,
               username: user.username,
               userId: user._id,
               isInterviewer: userIsInterviewer,
@@ -88,7 +122,6 @@ function IDE() {
           };
 
           socket.on("connect", emitJoinRoom);
-
           if (socket.connected) emitJoinRoom();
         }
       } catch (error) {
@@ -108,13 +141,13 @@ function IDE() {
       socket.off("leaderboard-update");
       socket.off("room-closed");
     };
-  }, [id, roomCode, navigate]);
+  }, [id, activeRoomCode, navigate]);
 
   // --- EFFECT 2: INTERVIEWER-ONLY NOTIFICATIONS (TOASTS) ---
   useEffect(() => {
     // 🚨 Exit if not in a room, or if the user is a candidate.
     // This ensures ONLY the interviewer sees the toasts.
-    if (!roomCode || !isInterviewer) return;
+    if (!activeRoomCode || !isInterviewer) return;
 
     const handleCandidateJoined = (candidate) => {
       showToast(`Candidate joined: ${candidate.username}`, "info");
@@ -185,11 +218,11 @@ function IDE() {
       socket.off("candidate-joined", handleCandidateJoined);
       socket.off("candidate-left", handleCandidateLeft);
     };
-  }, [isInterviewer, roomCode, id]);
+  }, [isInterviewer, activeRoomCode, id]);
 
   // --- EFFECT 3: CANDIDATE-ONLY LISTENERS ---
   useEffect(() => {
-    if (isInterviewer || !roomCode) return;
+    if (isInterviewer || !activeRoomCode) return;
 
     const handleRoomClosed = () => {
       showToast("The interviewer has closed the session. Exiting...", "error", 3000);
@@ -200,7 +233,7 @@ function IDE() {
 
     socket.on("room-closed", handleRoomClosed);
     return () => socket.off("room-closed", handleRoomClosed);
-  }, [isInterviewer, roomCode, navigate]);
+  }, [isInterviewer, activeRoomCode, navigate]);
 
   // Sync ref for polling and auto-fetch history
   useEffect(() => {
@@ -221,10 +254,10 @@ function IDE() {
         if (activeTabRef.current === "submissions") {
           fetchHistory();
         }
-        if (roomCode && currentUser) {
+        if (activeRoomCode && currentUser) {
           if (!socket.connected) socket.connect();
           socket.emit("candidate-submission", {
-            roomCode,
+            roomCode: activeRoomCode,
             username: currentUser.username,
             status: jobData.status,
             problemId: id,
@@ -235,7 +268,7 @@ function IDE() {
 
     socket.on("job-verdict", handleJobVerdict);
     return () => socket.off("job-verdict", handleJobVerdict);
-  }, [roomCode, currentUser, id]);
+  }, [activeRoomCode, currentUser, id]);
 
   const fetchHistory = async () => {
     try {
@@ -248,9 +281,9 @@ function IDE() {
 
   const handleLogout = async () => {
     try {
-      if (roomCode) {
+      if (activeRoomCode) {
         if (!socket.connected) socket.connect();
-        socket.emit("leave-room", roomCode);
+        socket.emit("leave-room", activeRoomCode);
         socket.disconnect();
       }
       await api.post("/users/logout");
@@ -261,15 +294,15 @@ function IDE() {
   };
 
   const handleCloseRoom = async () => {
-    if (!roomCode) {
+    if (!activeRoomCode) {
       navigate("/");
       return;
     }
     showToast("Closing interview for all candidates...", "error", 2000);
     if (!socket.connected) socket.connect();
-    socket.emit("interviewer-closed-room", roomCode);
+    socket.emit("interviewer-closed-room", activeRoomCode);
     try {
-      await api.post(`/rooms/close/${roomCode}`);
+      await api.post(`/rooms/close/${activeRoomCode}`);
     } catch (error) {
       console.error("Failed to close room:", error);
     } finally {
@@ -500,8 +533,8 @@ function IDE() {
         <div className="flex items-center gap-6">
           <button
             onClick={() => {
-              if (roomCode) {
-                navigate(`/room/${roomCode}`);
+              if (activeRoomCode) {
+                navigate(`/room/${activeRoomCode}`);
                 return;
               }
               navigate("/");
@@ -524,7 +557,7 @@ function IDE() {
               </svg>
             </div>
             <span className="text-[10px] font-bold uppercase tracking-widest">
-              {roomCode ? "Return to Room" : "Dashboard"}
+              {activeRoomCode ? "Return to Room" : "Dashboard"}
             </span>
           </button>
           <div className="h-4 w-px bg-zinc-800"></div>
@@ -544,9 +577,9 @@ function IDE() {
               >
                 {problem?.difficulty || "Standard"}
               </span>
-              {roomCode && (
+              {activeRoomCode && (
                 <span className="bg-blue-500/10 text-blue-400 text-[8px] px-1.5 py-0.5 rounded-md border border-blue-500/20 uppercase tracking-widest font-black">
-                  Session: {roomCode}
+                  Session: {activeRoomCode}
                 </span>
               )}
             </div>
@@ -585,7 +618,7 @@ function IDE() {
             </div>
           </div>
           {/* Interviewer-only: live candidate status for this problem */}
-          {roomCode && isInterviewer && (
+          {activeRoomCode && isInterviewer && (
             <div className="flex items-center gap-2 bg-zinc-900/50 px-3 py-1.5 rounded-lg border border-zinc-800/60 shadow-inner">
               <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                 Candidate
@@ -612,14 +645,14 @@ function IDE() {
               )}
             </div>
           )}
-          {roomCode && !isInterviewer && (
+          {activeRoomCode && !isInterviewer && (
             <Button
               variant="secondary"
               size="sm"
               onClick={() => {
                 showToast("exiting room...", "info", 1500);
                 if (!socket.connected) socket.connect();
-                socket.emit("leave-room", roomCode);
+                socket.emit("leave-room", activeRoomCode);
                 setTimeout(() => navigate("/"), 1500);
               }}
             >
@@ -749,7 +782,7 @@ function IDE() {
                 code={code} 
                 setCode={setCode} 
                 language="cpp" 
-                roomCode={roomCode}
+                roomCode={activeRoomCode}
                 currentUser={currentUser}
                 isInterviewer={isInterviewer}
                 onMount={(editor) => monacoEditorRef.current = editor}
