@@ -6,8 +6,10 @@ import MultiplayerCursors from "../components/MultiplayerCursors";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
-import { LogOut } from "lucide-react";
+import { LogOut, Play, Send, Loader2, Rocket } from "lucide-react";
 import Toast from "../components/ui/Toast";
+// eslint-disable-next-line no-unused-vars
+import { motion, AnimatePresence } from "framer-motion";
 
 import { socket } from "../utils/socket";
 
@@ -24,6 +26,7 @@ function IDE() {
   const [room, setRoom] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [isInterviewer, setIsInterviewer] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [liveStatuses, setLiveStatuses] = useState({});
 
   // Problem & IDE State
@@ -149,7 +152,7 @@ function IDE() {
     return () => {
       socket.off("connect");
     };
-  }, [id, activeRoomCode, navigate]);
+  }, [id, activeRoomCode, navigate, sessionCode]);
 
   // --- EFFECT 2: INTERVIEWER-ONLY NOTIFICATIONS (TOASTS) ---
   useEffect(() => {
@@ -270,7 +273,8 @@ function IDE() {
     try {
       const response = await api.get(`/submissions/history/${id}`);
       setHistory(Array.isArray(response.data.data) ? response.data.data : []);
-    } catch (error) {
+    } catch (err) {
+      console.error("Failed to fetch history:", err);
       setHistory([]);
     }
   }, [id]);
@@ -399,7 +403,8 @@ function IDE() {
       if (!socket.connected) socket.connect();
       socket.emit("subscribe-job", jobId);
       if (activeRoomCode) socket.emit("sync-execution-start", { type });
-    } catch (error) {
+    } catch (err) {
+      console.error("Execution error:", err);
       setStatus("Error");
       setIsRunning(false);
       setIsSubmitting(false);
@@ -431,7 +436,9 @@ function IDE() {
     } else if (typeof output === "string" && output.trim().startsWith("[")) {
       try {
         parsedResults = JSON.parse(output);
-      } catch (e) {}
+      } catch {
+        // Ignore JSON parse errors
+      }
     }
 
     if (
@@ -614,7 +621,8 @@ function IDE() {
         <MultiplayerCursors activeRoomCode={activeRoomCode} currentUser={currentUser} />
       )}
 
-      <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
+      <div className="h-screen w-screen bg-[#030303] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
+      <div className="absolute inset-0 animated-mesh-bg opacity-20 pointer-events-none z-0" />
       {toast && (
         <Toast
           message={toast.message}
@@ -622,7 +630,7 @@ function IDE() {
           onClose={() => setToast(null)}
         />
       )}
-      <header className="h-14 flex justify-between items-center bg-[#0d0d0d] border-b border-zinc-800 px-6 shrink-0 z-30">
+      <header className="h-16 flex justify-between items-center glass-panel border-b border-white/[0.05] px-8 shrink-0 z-30">
         <div className="flex items-center gap-6">
           <button
             onClick={() => {
@@ -630,7 +638,7 @@ function IDE() {
             }}
             className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors group"
           >
-            <div className="w-8 h-8 rounded-lg bg-zinc-800/50 flex items-center justify-center border border-zinc-700/50 group-hover:bg-zinc-700 transition-colors">
+            <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center border border-white/10 group-hover:bg-white/10 transition-colors">
               <svg
                 width="14"
                 height="14"
@@ -781,10 +789,10 @@ function IDE() {
           </Button>
         </div>
       </header>
-      <div className="flex-1 flex gap-2 p-2 overflow-hidden">
+      <div className="flex-1 flex gap-3 p-3 overflow-hidden relative z-10">
         {/* Left panel: problem description / submission history */}
-        <div className="w-5/12 bg-[#0d0d0d] rounded-xl flex flex-col border border-zinc-800 shadow-xl overflow-hidden">
-          <div className="bg-[#141414] flex gap-1 shrink-0 border-b border-zinc-800/50 px-2">
+        <div className="w-5/12 glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden">
+          <div className="bg-black/40 backdrop-blur-md flex gap-2 shrink-0 border-b border-white/[0.05] px-4 pt-2">
             <button
               onClick={() => setActiveTab("description")}
               className={`text-[10px] font-bold uppercase tracking-widest px-6 py-3 transition-all ${activeTab === "description" ? "text-white border-b-2 border-white" : "text-zinc-500 hover:text-zinc-300"}`}
@@ -878,15 +886,15 @@ function IDE() {
           </div>
         </div>
 
-        {/* Right panel: code editor + console */}
-        <div className="w-7/12 flex flex-col gap-2 overflow-hidden">
-          <div className="flex-1 bg-[#0d0d0d] rounded-xl flex flex-col border border-zinc-800 shadow-xl overflow-hidden">
-            <div className="bg-[#141414] px-6 py-3 border-b border-zinc-800 flex justify-between items-center">
-              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest bg-blue-500/10 px-3 py-1 rounded-md border border-blue-500/20">
-                C++ 17
+        {/* Right panel: Editor and Console */}
+        <div className="w-7/12 flex flex-col gap-3 min-h-0">
+          <div className="flex-1 glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden min-h-0">
+            <div className="bg-black/40 backdrop-blur-md px-6 py-4 flex justify-between items-center border-b border-white/[0.05] shrink-0">
+              <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest glow-cyan drop-shadow-md">
+                main.cpp
               </span>
             </div>
-            <div className="flex-1 bg-[#050505] overflow-hidden relative">
+            <div className="flex-1 relative bg-black/20 overflow-hidden">
               <CodeEditor 
                 key={id}
                 code={code} 
@@ -900,33 +908,110 @@ function IDE() {
             </div>
           </div>
 
-          <div className="h-[40%] bg-[#0d0d0d] rounded-xl flex flex-col border border-zinc-800 shadow-xl overflow-hidden shrink-0">
-            <div className="bg-[#141414] px-6 py-3 border-b border-zinc-800">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                Console
+          <div className="h-[45%] glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden shrink-0">
+            <div className="bg-black/40 backdrop-blur-md px-6 py-4 border-b border-white/[0.05] shrink-0">
+              <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest glow-purple drop-shadow-md">
+                Console Output
               </span>
             </div>
-            <div className="flex-1 p-6 bg-[#050505] overflow-y-auto custom-scrollbar">
+            <div className="flex-1 p-6 bg-black/20 overflow-y-auto custom-scrollbar">
               {renderConsoleContent()}
             </div>
-          </div>
-          <div className="h-16 flex justify-end items-center px-2 gap-3 shrink-0">
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => handleExecution("run")}
-              disabled={isRunning || isSubmitting}
-            >
-              {isRunning ? "Running..." : "Run"}
-            </Button>
-            <Button
-              variant="success"
-              size="lg"
-              onClick={() => handleExecution("submit")}
-              disabled={isRunning || isSubmitting}
-            >
-              {isSubmitting ? "Submitting..." : "Submit"}
-            </Button>
+            <div className="bg-black/40 backdrop-blur-md px-6 py-3 border-t border-white/[0.05] flex justify-end items-center gap-3 shrink-0">
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => handleExecution("run")}
+                disabled={isRunning || isSubmitting}
+                className="relative overflow-hidden group w-[140px] flex justify-center shadow-lg"
+              >
+                <AnimatePresence mode="wait">
+                  {isRunning ? (
+                    <motion.div
+                      key="running"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="flex items-center justify-center gap-2 text-zinc-300"
+                    >
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Running</span>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="run"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Run</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
+                {/* Shimmer Effect */}
+                {isRunning && (
+                  <motion.div 
+                    className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12"
+                    animate={{ translateX: ["-100%", "200%"] }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                  />
+                )}
+              </Button>
+              
+              <Button
+                variant="success"
+                size="lg"
+                onClick={() => handleExecution("submit")}
+                disabled={isRunning || isSubmitting}
+                className={`relative overflow-hidden w-[140px] flex justify-center shadow-lg ${isSubmitting ? 'border-emerald-400' : ''}`}
+              >
+                <AnimatePresence mode="wait">
+                  {isSubmitting ? (
+                    <motion.div
+                      key="submitting"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      className="flex items-center justify-center gap-2 relative w-full h-full"
+                    >
+                      <motion.div
+                        className="absolute inset-0 flex items-center justify-center"
+                        animate={{ x: [-100, 100], y: [20, -20] }}
+                        transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+                      >
+                        <Rocket className="w-6 h-6 text-white/50 opacity-50" />
+                      </motion.div>
+                      <span className="relative z-10 text-white font-bold tracking-widest drop-shadow-md">
+                        Submitting
+                      </span>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="submit"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      className="flex items-center justify-center gap-2"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>Submit</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Success Shimmer Effect */}
+                {isSubmitting && (
+                  <motion.div 
+                    className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12"
+                    animate={{ translateX: ["-100%", "200%"] }}
+                    transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                  />
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

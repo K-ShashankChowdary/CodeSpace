@@ -47,7 +47,7 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
     });
   };
 
-  const handleEditorDidMount = (editor, monaco) => {
+  const handleEditorDidMount = (editor) => {
     editorRef.current = editor;
     
     // Pass the editor instance up to IDE.jsx so it can grab the latest code directly 
@@ -183,7 +183,6 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
       }
 
       // Preserve existing state, just update color
-      const currentState = providerRef.current.awareness.getLocalState();
       providerRef.current.awareness.setLocalStateField('user', {
         name: currentUser.username,
         color: myColor

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+// eslint-disable-next-line no-unused-vars
+import { motion } from "framer-motion";
 import api from "../services/api";
 
 function GuestJoin() {
@@ -18,6 +20,7 @@ function GuestJoin() {
           setCurrentUser(res.data.data);
         }
       } catch (err) {
+        console.error("Auth check failed:", err);
         // Not logged in, stay as guest
       }
     };
@@ -45,6 +48,7 @@ function GuestJoin() {
       
       navigate(`/problem/${activeProblem}?session=${sessionCode}`);
     } catch (err) {
+      console.error(err);
       setError("Failed to join session. You may not have access.");
       setIsLoading(false);
     }
@@ -79,6 +83,7 @@ function GuestJoin() {
       
       navigate(`/problem/${activeProblem}?session=${sessionCode}`);
     } catch (err) {
+      console.error(err);
       setError(
         err.response?.data?.message || "Failed to join session. Check the invite link."
       );
@@ -87,27 +92,32 @@ function GuestJoin() {
   };
 
   return (
-    <div className="h-screen w-screen bg-[#050505] flex flex-col items-center justify-center font-sans text-zinc-200 relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-3xl" />
-      </div>
+    <div className="h-screen w-screen bg-[#030303] flex flex-col items-center justify-center font-sans text-zinc-200 relative overflow-hidden">
+      <div className="absolute inset-0 animated-mesh-bg opacity-30 z-0 pointer-events-none" />
 
-      <div className="relative z-10 w-full max-w-md px-6">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="relative z-10 w-full max-w-md px-6"
+      >
         <div className="flex items-center gap-3 justify-center mb-10">
-          <img src="/fevicon.svg" alt="CodeSpace" className="w-8 h-8" />
-          <span className="text-xl font-black tracking-tighter text-white">
-            Code<span className="text-blue-400">Space</span>
+          <img src="/fevicon.svg" alt="CodeSpace" className="w-10 h-10 drop-shadow-xl" />
+          <span className="text-2xl font-black tracking-tighter text-white">
+            Code<span className="text-gradient">Space</span>
           </span>
         </div>
 
-        <div className="bg-[#0d0d0d] border border-zinc-800/60 rounded-2xl p-8 shadow-2xl">
-          <div className="mb-6">
+        <div className="glass-panel rounded-3xl p-10 shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-purple-500/5 pointer-events-none" />
+          
+          <div className="mb-8 relative z-10">
             <h1 className="text-2xl font-black text-white tracking-tight mb-1">
               Join Interview
             </h1>
             <p className="text-sm text-zinc-500">
               Session{" "}
-              <span className="text-blue-400 font-mono font-bold tracking-widest">
+              <span className="text-cyan-400 font-mono font-bold tracking-widest bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
                 {sessionCode}
               </span>
             </p>
@@ -124,14 +134,16 @@ function GuestJoin() {
                   {currentUser.username.charAt(0).toUpperCase()}
                 </div>
               </div>
+              <div>
               <button
                 type="button"
                 onClick={handleAuthenticatedJoin}
                 disabled={isLoading}
-                className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-black uppercase tracking-widest transition-all duration-200 flex items-center justify-center gap-2"
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-black uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] transform active:scale-[0.98]"
               >
-                {isLoading ? "Joining..." : `Join as ${currentUser.username} →`}
+                {isLoading ? "Joining..." : "Enter Room"}
               </button>
+            </div>
               
               <div className="flex items-center gap-4 py-2">
                 <div className="h-px bg-zinc-800 flex-1"></div>
@@ -196,7 +208,7 @@ function GuestJoin() {
             No account required for guests
           </p>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

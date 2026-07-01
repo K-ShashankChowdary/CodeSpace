@@ -18,6 +18,7 @@ const STATUS_MAP = {
 /**
  * Converts a short status code (AC, WA, TLE, etc.) to its full human-readable label.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export const getFullStatus = (statusCode) => {
   return STATUS_MAP[statusCode]?.label || statusCode;
 };
@@ -25,6 +26,7 @@ export const getFullStatus = (statusCode) => {
 /**
  * Returns the Tailwind text color class for a given status code.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export const getStatusColor = (statusCode) => {
   return STATUS_MAP[statusCode]?.color || "text-zinc-400";
 };

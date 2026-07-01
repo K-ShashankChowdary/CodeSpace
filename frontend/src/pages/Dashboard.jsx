@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+// eslint-disable-next-line no-unused-vars
+import { motion, AnimatePresence } from "framer-motion";
 import api from "../services/api";
 import { socket } from "../utils/socket";
 import Button from "../components/ui/Button";
@@ -10,7 +12,6 @@ import { Search, Plus, Play, Info as InfoIcon, LogOut, LayoutGrid, Users, X, Che
 
 function Dashboard() {
   const [problems, setProblems] = useState([]);
-  const [roomCodeInput, setRoomCodeInput] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchFilter, setSearchFilter] = useState("");
@@ -20,7 +21,6 @@ function Dashboard() {
   const [modalSearch, setModalSearch] = useState("");
   const [selectedProblems, setSelectedProblems] = useState([]);
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
-  const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   
   // Toast Notification State
   const [toast, setToast] = useState(null);
@@ -74,22 +74,6 @@ function Dashboard() {
     }
   };
 
-  const handleJoinRoom = async (e) => {
-    e.preventDefault();
-    if (!roomCodeInput.trim() || isJoiningRoom) return;
-    setIsJoiningRoom(true);
-    try {
-      const res = await api.post("/rooms/join", { roomCode: roomCodeInput });
-      const { roomCode } = res.data.data;
-      navigate(`/room/${roomCode}`);
-    } catch (error) {
-      console.error("Failed to join room", error);
-      showToast(error.response?.data?.message || "Invalid or expired room code", "error");
-    } finally {
-      setIsJoiningRoom(false);
-    }
-  };
-
   const handleLogout = async () => {
     try {
       if (socket.connected) {
@@ -122,56 +106,36 @@ function Dashboard() {
     return problems.filter(p => p.title.toLowerCase().includes(modalSearch.toLowerCase()));
   }, [problems, modalSearch]);
 
-  if (isLoading) {
-    return (
-      <div className="h-screen bg-[#050505] flex items-center justify-center">
-        <Spinner size="md" label="Loading Workspace" />
-      </div>
-    );
-  }
+
 
   return (
-    <div className="h-screen w-screen bg-[#050505] text-zinc-300 font-sans flex overflow-hidden">
+    <div className="h-screen w-screen bg-[#030303] text-zinc-300 font-sans flex overflow-hidden">
       
       {/* Sidebar Navigation */}
-      <aside className="w-64 bg-[#0a0a0a] border-r border-zinc-800/50 flex flex-col shrink-0 z-20">
-        <div className="p-8 border-b border-zinc-800/40">
-          <h1 className="text-xl font-black text-white tracking-tighter flex items-center gap-3 active:scale-95 transition-transform" onClick={() => navigate("/")}>
+      <aside className="w-64 glass-panel border-r border-white/[0.05] flex flex-col shrink-0 z-20 shadow-2xl relative">
+        <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent pointer-events-none" />
+        <div className="p-8 border-b border-white/[0.05] relative z-10">
+          <h1 className="text-xl font-black text-white tracking-tighter flex items-center gap-3 active:scale-95 transition-transform cursor-pointer" onClick={() => navigate("/")}>
             <div className="relative group">
-              <div className="absolute inset-0 bg-blue-500 blur-md opacity-20 group-hover:opacity-40 transition-opacity" />
-              <img src="/fevicon.svg" alt="CodeSpace" className="w-9 h-9 relative z-10" />
+              <div className="absolute inset-0 bg-cyan-500 blur-lg opacity-40 group-hover:opacity-70 transition-opacity" />
+              <img src="/fevicon.svg" alt="CodeSpace" className="w-9 h-9 relative z-10 drop-shadow-xl" />
             </div>
             <span className="text-gradient">CodeSpace</span>
           </h1>
         </div>
         
-        <div className="p-5 flex-1 flex flex-col gap-8">
+        <div className="p-5 flex-1 flex flex-col gap-8 relative z-10">
           <div className="space-y-1.5">
-            <div className="w-full px-4 py-2.5 rounded-xl bg-blue-500/10 
-            text-blue-400 font-bold text-sm border border-blue-500/20 inner-glow">
+            <div className="w-full px-4 py-2.5 rounded-xl bg-cyan-500/10 
+            text-cyan-400 font-bold text-sm border border-cyan-500/20 inner-glow glow-cyan backdrop-blur-md">
               Problem Set
             </div>
-            <button onClick={() => setIsModalOpen(true)} className="w-full text-left px-4 py-2.5 rounded-xl text-zinc-500 font-bold text-sm hover:bg-zinc-900 transition-all group flex justify-between items-center">
+            <button onClick={() => setIsModalOpen(true)} className="w-full text-left px-4 py-2.5 rounded-xl text-zinc-400 font-bold text-sm hover:bg-white/[0.03] hover:text-white transition-all group flex justify-between items-center">
               Host Interview
-              <span className="opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-blue-500 font-black">›</span>
+              <span className="opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-cyan-400 font-black glow-cyan">›</span>
             </button>
           </div>
 
-          <div className="space-y-4">
-            <form onSubmit={handleJoinRoom} className="px-1 flex flex-col gap-3">
-              <Input
-                name="roomCode"
-                placeholder="Interview Code"
-                value={roomCodeInput}
-                onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
-                maxLength={6}
-                className="w-full font-mono uppercase bg-zinc-900/30 border-zinc-800/40 text-xs"
-              />
-              <Button type="submit" variant="primary" disabled={!roomCodeInput.trim() || isJoiningRoom} className="w-full text-[10px]">
-                {isJoiningRoom ? "Joining..." : "Join Interview"}
-              </Button>
-            </form>
-          </div>
         </div>
         
         <div className="p-6 border-t border-zinc-800/40">
@@ -187,96 +151,122 @@ function Dashboard() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-[#020202] relative shadow-[inset_1px_0_0_0_rgba(255,255,255,0.03)]">
-        <header className="h-24 px-12 flex items-center justify-between border-b border-zinc-800/30 bg-[#0a0a0a]/40 backdrop-blur-2xl sticky top-0 z-10 shrink-0">
+      <main className="flex-1 flex flex-col overflow-hidden bg-[#030303] relative">
+        <div className="absolute inset-0 animated-mesh-bg opacity-40 z-0 pointer-events-none" />
+        
+        <header className="h-24 px-12 flex items-center justify-between border-b border-white/[0.05] bg-[#0a0a0a]/30 backdrop-blur-3xl sticky top-0 z-10 shrink-0">
           <div>
-            <h2 className="text-3xl font-black text-white tracking-tighter italic">Problem Set</h2>
+            <h2 className="text-3xl font-black text-white tracking-tighter italic drop-shadow-lg">Problem Set</h2>
           </div>
           <div className="w-72">
              <Input 
                 placeholder="Search problems" 
                 value={searchFilter} 
                 onChange={(e) => setSearchFilter(e.target.value)} 
-                className="w-full bg-zinc-900/20 border-zinc-800/40 text-xs"
+                className="w-full glass-panel border-white/10 text-xs text-white placeholder-zinc-500 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50"
               />
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-12">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-12 relative z-10">
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-8 text-sm">
               {error}
             </div>
           )}
 
-          <div className="w-full bg-[#0a0a0a] border border-zinc-800/60 rounded-2xl overflow-hidden shadow-2xl">
+          <div className="w-full glass-card rounded-3xl overflow-hidden">
             {/* Table Header */}
-            <div className="grid grid-cols-12 gap-4 p-4 border-b border-zinc-800/60 bg-[#050505] text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+            <div className="grid grid-cols-12 gap-4 p-5 border-b border-white/[0.05] bg-black/40 text-[10px] font-bold uppercase tracking-widest text-zinc-500 backdrop-blur-md">
               <div className="col-span-12 sm:col-span-6 pl-6">Title</div>
               <div className="col-span-3 hidden sm:block text-center">Difficulty</div>
               <div className="col-span-3 hidden sm:block"></div>
             </div>
 
             {/* Table Body */}
-            <div className="divide-y divide-zinc-800/50">
-              {mainFilteredProblems.length === 0 && !error ? (
+            <div className="divide-y divide-white/[0.02]">
+              {isLoading ? (
+                [...Array(6)].map((_, i) => (
+                  <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    transition={{ delay: i * 0.05 }} 
+                    key={i} 
+                    className="relative grid grid-cols-12 gap-4 p-6 items-center"
+                  >
+                    <div className="col-span-12 sm:col-span-6 pl-4">
+                      <div className="h-5 w-3/4 bg-white/5 rounded-md animate-pulse"></div>
+                      <div className="mt-2 sm:hidden h-3 w-1/3 bg-white/5 rounded-md animate-pulse"></div>
+                    </div>
+                    <div className="col-span-3 hidden sm:flex items-center justify-center">
+                      <div className="h-6 w-16 bg-white/5 rounded-full animate-pulse"></div>
+                    </div>
+                    <div className="col-span-3 hidden sm:flex items-center justify-end pr-6">
+                      <div className="h-8 w-24 bg-white/5 rounded-full animate-pulse"></div>
+                    </div>
+                  </motion.div>
+                ))
+              ) : mainFilteredProblems.length === 0 && !error ? (
                  <div className="py-20 text-center">
                   <div className="text-4xl mb-4 opacity-50">📁</div>
                   <h3 className="text-lg font-bold text-zinc-300">No problems found</h3>
                   <p className="text-zinc-500 text-sm mt-2">Adjust your search filter or check database connectivity.</p>
                 </div>
               ) : (
-                mainFilteredProblems.map((problem) => (
-                  <div 
+                mainFilteredProblems.map((problem, i) => (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: i * 0.05 }}
                     key={problem._id} 
                     onClick={() => navigate(`/problem/${problem._id}`)}
-                    className="relative grid grid-cols-12 gap-4 p-5 items-center cursor-pointer transition-all duration-300 group overflow-hidden"
+                    className="relative grid grid-cols-12 gap-4 p-6 items-center cursor-pointer transition-all duration-300 group overflow-hidden hover:bg-white/[0.02]"
                   >
                     {/* Glassmorphism Hover Background */}
-                    <div className="absolute inset-0 bg-blue-500/0 group-hover:bg-blue-500/5 group-hover:backdrop-blur-sm transition-all duration-500" />
+                    <div className="absolute inset-0 bg-cyan-500/0 group-hover:bg-cyan-500/5 group-hover:backdrop-blur-md transition-all duration-500" />
                     
                     {/* Left Accent Border */}
-                    <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-transparent group-hover:bg-blue-500 transition-all duration-300 transform scale-y-0 group-hover:scale-y-100" />
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-transparent group-hover:bg-cyan-400 transition-all duration-300 transform scale-y-0 group-hover:scale-y-100 glow-cyan" />
 
                     <div className="col-span-12 sm:col-span-6 pl-4 relative z-10">
                       <div className="flex items-center gap-3">
                         <div className="min-w-0">
-                          <h3 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors truncate tracking-tight">
+                          <h3 className="text-base font-bold text-zinc-200 group-hover:text-white transition-colors truncate tracking-tight drop-shadow-sm">
                             {problem.title}
                           </h3>
-                          <div className="mt-1 sm:hidden flex items-center gap-2">
-                            <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${
-                               problem.difficulty === "Easy" ? "text-green-400 border-green-500/20 bg-green-500/10" : 
+                          <div className="mt-1.5 sm:hidden flex items-center gap-2">
+                            <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded border ${
+                               problem.difficulty === "Easy" ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/10" : 
                                problem.difficulty === "Medium" ? "text-yellow-400 border-yellow-500/20 bg-yellow-500/10" : 
                                "text-red-400 border-red-500/20 bg-red-500/10"
                              }`}>
-                              {problem.difficulty || "Standard"}
-                            </span>
-                            <span className="text-[10px] text-blue-500 font-black uppercase tracking-tighter italic">Solve ›</span>
+                               {problem.difficulty || "Standard"}
+                             </span>
+                             <span className="text-[10px] text-cyan-400 font-black uppercase tracking-tighter italic">Solve ›</span>
                           </div>
                         </div>
                       </div>
                     </div>
                     
                     <div className="col-span-3 hidden sm:flex items-center justify-center relative z-10">
-                      <span className={`text-[9px] font-black uppercase tracking-[0.15em] px-3 py-1.5 rounded-lg border backdrop-blur-md transition-all ${
-                         problem.difficulty === "Easy" ? "text-green-400 border-green-500/10 bg-green-500/5 group-hover:border-green-500/30" : 
-                         problem.difficulty === "Medium" ? "text-yellow-400 border-yellow-500/10 bg-yellow-500/5 group-hover:border-yellow-500/30" : 
-                         "text-red-400 border-red-500/10 bg-red-500/5 group-hover:border-red-500/30"
+                      <span className={`text-[9px] font-black uppercase tracking-[0.15em] px-4 py-2 rounded-lg border backdrop-blur-md transition-all ${
+                         problem.difficulty === "Easy" ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/10 group-hover:border-emerald-400/50 group-hover:glow-emerald" : 
+                         problem.difficulty === "Medium" ? "text-yellow-400 border-yellow-500/20 bg-yellow-500/10 group-hover:border-yellow-400/50" : 
+                         "text-red-400 border-red-500/20 bg-red-500/10 group-hover:border-red-400/50"
                        }`}>
                         {problem.difficulty || "Standard"}
                       </span>
                     </div>
 
                     <div className="col-span-3 hidden sm:flex items-center justify-end pr-6 relative z-10">
-                      <div className="flex items-center gap-2 px-5 py-2 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-500 font-black text-[10px] uppercase tracking-widest group-hover:bg-blue-600 group-hover:border-blue-500 group-hover:text-white group-hover:shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all duration-300 transform group-hover:scale-105">
+                      <div className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white/[0.03] border border-white/10 text-zinc-400 font-black text-[10px] uppercase tracking-widest group-hover:bg-cyan-500 group-hover:border-cyan-400 group-hover:text-black group-hover:shadow-[0_0_20px_rgba(34,211,238,0.5)] transition-all duration-300 transform group-hover:scale-105 backdrop-blur-md">
                         <span>Solve</span>
                         <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M8 5v14l11-7z" />
                         </svg>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 ))
               )}
             </div>

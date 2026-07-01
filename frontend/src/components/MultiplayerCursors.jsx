@@ -89,30 +89,36 @@ export default function MultiplayerCursors({ activeRoomCode, currentUser }) {
         return (
           <div
             key={username}
-            className="absolute top-0 left-0 transition-all duration-75 ease-linear flex flex-col items-start drop-shadow-xl"
+            className="absolute top-0 left-0 transition-all duration-75 ease-linear flex flex-col items-start drop-shadow-2xl"
             style={{
               transform: `translate(${pos.x}vw, ${pos.y}vh)`,
+              filter: `drop-shadow(0 0 8px ${color}80)`
             }}
           >
-            {/* Custom SVG Cursor */}
+            {/* Custom SVG Cursor with Inner Glow */}
             <svg
-              width="24"
-              height="24"
+              width="28"
+              height="28"
               viewBox="0 0 24 24"
               fill={color}
               stroke="white"
-              strokeWidth="2"
+              strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="relative -top-[10px] -left-[10px]"
+              className="relative -top-[12px] -left-[12px]"
+              style={{ filter: `drop-shadow(0 0 10px ${color})` }}
             >
               <path d="M4 4l16 5.333L12 12l-2.667 8L4 4z" />
             </svg>
             
             {/* Username Pill */}
             <div
-              className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white whitespace-nowrap -mt-1 ml-3"
-              style={{ backgroundColor: color }}
+              className="px-3 py-1 rounded-full text-[11px] font-black tracking-widest text-white whitespace-nowrap -mt-2 ml-4 backdrop-blur-md border border-white/20 uppercase shadow-lg"
+              style={{ 
+                backgroundColor: `${color}E6`, // 90% opacity
+                boxShadow: `0 4px 15px ${color}66`,
+                textShadow: "0 1px 2px rgba(0,0,0,0.5)"
+              }}
             >
               {username}
             </div>

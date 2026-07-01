@@ -4,17 +4,17 @@ import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 const Toast = ({ message, type = "info", onClose, duration = 4000 }) => {
   const [isExiting, setIsExiting] = useState(false);
 
+  const handleClose = React.useCallback(() => {
+    setIsExiting(true);
+    setTimeout(onClose, 300);
+  }, [onClose]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       handleClose();
     }, duration);
     return () => clearTimeout(timer);
-  }, [duration]);
-
-  const handleClose = () => {
-    setIsExiting(true);
-    setTimeout(onClose, 300);
-  };
+  }, [duration, handleClose]);
 
   const icons = {
     success: <CheckCircle2 className="w-5 h-5 text-green-400" />,

@@ -37,12 +37,13 @@ function App() {
         if (!socket.connected) {
           socket.connect();
         }
-      } catch (error) {
+      } catch (err) {
+        console.error(err);
         setIsAuthenticated(false);
       }
     };
     checkAuthStatus();
-  }, [isGuestRoute]);
+  }, [isGuestRoute, location.pathname]);
 
   // Show the guest join page immediately — no auth spinner needed
   if (isGuestRoute) {
@@ -59,7 +60,7 @@ function App() {
   // loading spinner while checking auth to prevent flash of wrong page
   if (isAuthenticated === null) {
     return (
-      <div className="h-screen w-screen bg-[#050505] flex flex-col items-center justify-center">
+      <div className="h-screen w-screen bg-[#030303] flex flex-col items-center justify-center">
         <Spinner size="md" label="Authenticating" />
       </div>
     );

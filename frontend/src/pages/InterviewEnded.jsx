@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+// eslint-disable-next-line no-unused-vars
+import { motion } from "framer-motion";
 import { CheckCircle, Code2, Sparkles } from "lucide-react";
 
 export default function InterviewEnded() {
@@ -22,30 +24,44 @@ export default function InterviewEnded() {
   }, [countdown, navigate]);
 
   return (
-    <div className="h-screen w-screen bg-[#050505] flex flex-col items-center justify-center font-sans text-zinc-200 relative overflow-hidden">
-      {/* Background Glows */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-green-500/5 rounded-full blur-[100px]" />
-        <div className="absolute top-[40%] left-[45%] w-[400px] h-[400px] bg-blue-500/10 rounded-full blur-[80px]" />
-      </div>
+    <div className="h-screen w-screen bg-[#030303] flex flex-col items-center justify-center font-sans text-zinc-200 relative overflow-hidden">
+      {/* Dynamic Animated Background Mesh */}
+      <div className="absolute inset-0 animated-mesh-bg opacity-40 mix-blend-screen z-0 pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none mix-blend-screen" />
 
-      <div className="relative z-10 w-full max-w-lg px-6 text-center">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 w-full max-w-xl px-6 text-center"
+      >
         {/* Animated Icon Container */}
-        <div className="relative w-32 h-32 mx-auto mb-10 flex items-center justify-center">
-          <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping opacity-20" style={{ animationDuration: '3s' }} />
-          <div className="absolute inset-0 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full opacity-10 blur-xl" />
-          <div className="relative bg-[#0d0d0d] border border-green-500/30 p-6 rounded-2xl shadow-[0_0_40px_rgba(34,197,94,0.15)] flex items-center justify-center">
-            <CheckCircle className="w-12 h-12 text-green-400" strokeWidth={2.5} />
-            <Sparkles className="absolute -top-3 -right-3 w-6 h-6 text-yellow-400 animate-pulse" />
+        <div className="relative w-36 h-36 mx-auto mb-10 flex items-center justify-center">
+          <motion.div 
+            animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 bg-emerald-500/20 rounded-full" 
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full opacity-10 blur-2xl" />
+          
+          <div className="relative glass-panel bg-zinc-900/60 backdrop-blur-xl border border-emerald-500/30 p-8 rounded-3xl shadow-[0_20px_60px_rgba(52,211,153,0.15)] flex items-center justify-center">
+            <CheckCircle className="w-14 h-14 text-emerald-400" strokeWidth={2} />
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+              className="absolute -top-3 -right-3"
+            >
+              <Sparkles className="w-7 h-7 text-yellow-400 drop-shadow-md" />
+            </motion.div>
           </div>
         </div>
 
         {/* Text Content */}
-        <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-4">
-          Interview <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600">Ended</span>
+        <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4 drop-shadow-sm">
+          Interview <span className="text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 via-cyan-400 to-blue-500">Ended</span>
         </h1>
         
-        <p className="text-lg text-zinc-400 mb-10 leading-relaxed font-medium">
+        <p className="text-lg md:text-xl text-zinc-400 mb-10 leading-relaxed font-medium px-4">
           {isInterviewer 
             ? "You have successfully closed the interview session. Navigating to dashboard..."
             : isCandidateExit
@@ -57,14 +73,26 @@ export default function InterviewEnded() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
             to="/"
-            className="flex items-center justify-center gap-2 px-8 py-3.5 bg-white text-black rounded-xl font-bold hover:bg-zinc-200 transition-all active:scale-95 w-full sm:w-auto shadow-[0_0_20px_rgba(255,255,255,0.1)] relative overflow-hidden"
+            className="flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-black rounded-xl font-black uppercase tracking-widest transition-all active:scale-[0.98] w-full sm:w-auto shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] relative overflow-hidden"
           >
-            <div className="absolute inset-0 bg-black/5" style={{ width: `${(countdown / 5) * 100}%`, transition: 'width 1s linear' }} />
-            <Code2 className="w-5 h-5 relative z-10" />
-            <span className="relative z-10">Return to Home ({countdown}s)</span>
+            <span className="relative z-10 flex items-center gap-2">
+              <Code2 className="w-5 h-5" />
+              Return to Dashboard
+            </span>
           </Link>
         </div>
-      </div>
+
+        {/* Progress Bar Container */}
+        <div className="mt-12 h-1.5 w-full max-w-xs mx-auto bg-white/5 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-emerald-400 to-cyan-500 transition-all ease-linear shadow-[0_0_10px_rgba(52,211,153,0.5)]" 
+            style={{ 
+              width: `${(countdown / 5) * 100}%`,
+              transitionDuration: '1000ms'
+            }} 
+          />
+        </div>
+      </motion.div>
       
       {/* Footer minimal branding */}
       <div className="absolute bottom-8 left-0 right-0 flex justify-center opacity-40">

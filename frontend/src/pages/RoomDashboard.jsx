@@ -17,7 +17,6 @@ function RoomDashboard() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
   const [room, setRoom] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
   const [isInterviewer, setIsInterviewer] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -151,7 +150,6 @@ function RoomDashboard() {
           participants: [],
         };
 
-        setCurrentUser(user);
         setRoom(roomData);
 
         const userIsInterviewer =
