@@ -280,20 +280,6 @@ function IDE() {
     return () => socket.off("job-verdict", handleJobVerdict);
   }, [id, activeRoomCode, currentUser]);
 
-  const handleCloseRoom = async () => {
-    if (window.confirm("Are you sure you want to end this interview for all participants?")) {
-      try {
-        await api.post(`/sessions/close/${activeRoomCode}`);
-        if (!socket.connected) socket.connect();
-        socket.emit("interviewer-closed-room", activeRoomCode);
-        showToast("Interview ended successfully", "success");
-        navigate("/");
-      } catch (err) {
-        console.error(err);
-        showToast("Failed to close interview", "error");
-      }
-    }
-  };
 
   const fetchHistory = async () => {
     try {
@@ -323,17 +309,17 @@ function IDE() {
       navigate("/");
       return;
     }
-    showToast("Closing interview for all candidates...", "error", 2000);
-    if (!socket.connected) socket.connect();
-    socket.emit("interviewer-closed-room", activeRoomCode);
-    try {
-      await api.post(`/rooms/close/${activeRoomCode}`);
-    } catch (error) {
-      console.error("Failed to close room:", error);
-    } finally {
-      setTimeout(() => {
+    if (window.confirm("Are you sure you want to end this interview for all participants?")) {
+      try {
+        await api.post(`/sessions/close/${activeRoomCode}`);
+        if (!socket.connected) socket.connect();
+        socket.emit("interviewer-closed-room", activeRoomCode);
+        showToast("Interview ended successfully", "success");
         navigate("/");
-      }, 2000);
+      } catch (err) {
+        console.error("Failed to close room:", err);
+        showToast("Failed to close interview", "error");
+      }
     }
   };
 
