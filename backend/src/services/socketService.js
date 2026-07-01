@@ -101,7 +101,9 @@ export const initializeSockets = (httpServer) => {
           return;
         }
 
-        const isInterviewer = entity.interviewer.toString() === socket.data.userId.toString();
+        const isInterviewer = socket.data.userId 
+          ? entity.interviewer.toString() === socket.data.userId.toString() 
+          : false;
         socket.data.isInterviewer = isInterviewer;
 
         if (isInterviewer) {
