@@ -673,14 +673,30 @@ function IDE() {
             </div>
           )}
           {activeRoomCode && isInterviewer && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleCloseRoom}
-              className="!bg-red-500/10 !text-red-500 !border-red-500/20 hover:!bg-red-500/20"
-            >
-              End Interview
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/join/${activeRoomCode}`);
+                  showToast("Invite link copied to clipboard!", "success");
+                }}
+                className="hidden md:flex gap-2 items-center"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                Copy Link
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleCloseRoom}
+                className="!bg-red-500/10 !text-red-500 !border-red-500/20 hover:!bg-red-500/20"
+              >
+                End Interview
+              </Button>
+            </>
           )}
           {activeRoomCode && !isInterviewer && (
             <Button
