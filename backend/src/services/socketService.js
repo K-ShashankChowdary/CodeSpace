@@ -72,36 +72,44 @@ export const initializeSockets = (httpServer) => {
 
     socket.on("join-room", async (data) => {
       try {
-        //  Extract username from the frontend payload
         const { roomCode, username, userId } = data;
-
         socket.join(roomCode);
 
-        //Save it safely to socket data for disconnect events
         socket.data.roomCode = roomCode;
         if (userId) socket.data.userId = userId;
         if (username) socket.data.username = username;
 
-        // Populate the studentId so we have the username for the UI
-        const room = await Room.findOne({ roomCode, isActive: true }).populate(
+        // Try Room first, fallback to Session
+        let entity = await Room.findOne({ roomCode, isActive: true }).populate(
           "candidateProgress.candidateId",
-          "username",
+          "username"
         );
+        let isSession = false;
 
-        if (!room) return;
+        if (!entity) {
+          const { Session } = await import("../models/session.model.js");
+          entity = await Session.findOne({ sessionCode: roomCode, status: "Active" }).populate(
+            "candidate",
+            "username"
+          );
+          isSession = true;
+        }
 
-        const isInterviewer = room.interviewer.toString() === socket.data.userId.toString();
+        if (!entity) return;
+
+        const isInterviewer = entity.interviewer.toString() === socket.data.userId.toString();
         socket.data.isInterviewer = isInterviewer;
 
         if (isInterviewer) {
-          //  Map the populated username instead of the raw ObjectId
-          const allProgress = room.candidateProgress.map((p) => ({
-            username: p.candidateId?.username,
-            results: Object.fromEntries(p.results),
-          }));
-          socket.emit("sync-entire-leaderboard", allProgress);
+          if (!isSession) {
+            const allProgress = entity.candidateProgress.map((p) => ({
+              username: p.candidateId?.username,
+              results: Object.fromEntries(p.results),
+            }));
+            socket.emit("sync-entire-leaderboard", allProgress);
+          }
+          // Note: for 1:1 sessions we don't have a global leaderboard to sync on join yet
         } else {
-          // Now we guarantee the username is actually defined when emitting to the interviewer
           socket.to(roomCode).emit("candidate-joined", {
             _id: socket.data.userId,
             username: socket.data.username,
@@ -116,34 +124,36 @@ export const initializeSockets = (httpServer) => {
     socket.on("candidate-submission", async (data) => {
       const { roomCode, status, problemId, username } = data;
       try {
-        const room = await Room.findOne({ roomCode, isActive: true });
-        if (!room) return;
+        let entity = await Room.findOne({ roomCode, isActive: true });
+        let isSession = false;
 
-        let progress = room.candidateProgress.find(
-          (p) => p.candidateId.toString() === socket.data.userId.toString(),
-        );
-        if (!progress) {
-          progress = { candidateId: socket.data.userId, results: new Map() };
-          room.candidateProgress.push(progress);
+        if (!entity) {
+          const { Session } = await import("../models/session.model.js");
+          entity = await Session.findOne({ sessionCode: roomCode, status: "Active" });
+          isSession = true;
         }
+        if (!entity) return;
 
-        const currentStatusInDB = progress.results.get(problemId);
-
-        if (currentStatusInDB !== "AC") {
-          progress.results.set(problemId, status);
-          room.markModified("candidateProgress");
-          await room.save();
-          io.to(roomCode).emit("leaderboard-update", {
-            username,
-            problemId,
-            status,
-          });
+        if (!isSession) {
+          let progress = entity.candidateProgress.find(
+            (p) => p.candidateId.toString() === socket.data.userId.toString()
+          );
+          if (!progress) {
+            progress = { candidateId: socket.data.userId, results: new Map() };
+            entity.candidateProgress.push(progress);
+          }
+          const currentStatusInDB = progress.results.get(problemId);
+          if (currentStatusInDB !== "AC") {
+            progress.results.set(problemId, status);
+            entity.markModified("candidateProgress");
+            await entity.save();
+            io.to(roomCode).emit("leaderboard-update", { username, problemId, status });
+          } else {
+            io.to(roomCode).emit("leaderboard-update", { username, problemId, status: "AC" });
+          }
         } else {
-          io.to(roomCode).emit("leaderboard-update", {
-            username,
-            problemId,
-            status: "AC",
-          });
+          // For 1:1 Session, just broadcast the status (backend persistance is in Session model if needed later)
+          io.to(roomCode).emit("leaderboard-update", { username, problemId, status });
         }
       } catch (error) {
         console.error("Submission Error:", error);
@@ -151,7 +161,12 @@ export const initializeSockets = (httpServer) => {
     });
 
     socket.on("interviewer-closed-room", async (roomCode) => {
-      socket.to(roomCode).emit("room-closed");
+      // SECURITY FIX: Only allow the actual interviewer to close the room
+      if (socket.data.isInterviewer) {
+        socket.to(roomCode).emit("room-closed");
+      } else {
+        console.warn(`[Security] Unauthorized attempt to close room ${roomCode} by ${socket.data.username}`);
+      }
     });
 
     // CANDIDATE LEAVING LOGIC

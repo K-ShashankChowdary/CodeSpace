@@ -108,14 +108,41 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
         document.head.appendChild(styleEl);
       }
       const cssRules = [];
-      provider.awareness.getStates().forEach((state, clientId) => {
+      const seenNames = new Set();
+      
+      const clients = Array.from(provider.awareness.getStates().entries());
+      
+      // Sort clients to prefer tabs that currently have editor focus (cursor != null)
+      // Fallback to deterministic sorting by clientId if both/neither are focused
+      clients.sort((a, b) => {
+        const aHasCursor = a[1].cursor ? 1 : 0;
+        const bHasCursor = b[1].cursor ? 1 : 0;
+        if (aHasCursor !== bHasCursor) return bHasCursor - aHasCursor;
+        return b[0] - a[0];
+      });
+
+      clients.forEach(([clientId, state]) => {
         if (state.user && state.user.name) {
-          cssRules.push(`
-            .yRemoteSelectionHead-${clientId}::before {
-              content: "${state.user.name}";
-              background-color: ${state.user.color};
-            }
-          `);
+          const isMe = currentUser && state.user.name === currentUser.username;
+          const isDuplicate = seenNames.has(state.user.name);
+
+          // Hide if it's our own cursor from another tab, or a duplicate of someone else's tab
+          if (isMe || isDuplicate) {
+            cssRules.push(`
+              .yRemoteSelection-${clientId},
+              .yRemoteSelectionHead-${clientId} {
+                display: none !important;
+              }
+            `);
+          } else {
+            seenNames.add(state.user.name);
+            cssRules.push(`
+              .yRemoteSelectionHead-${clientId}::before {
+                content: "${state.user.name}";
+                background-color: ${state.user.color};
+              }
+            `);
+          }
         }
       });
       styleEl.innerHTML = cssRules.join('\n');

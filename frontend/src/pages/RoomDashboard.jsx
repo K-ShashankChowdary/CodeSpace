@@ -48,7 +48,7 @@ function RoomDashboard() {
     if (!socket.connected) socket.connect();
     socket.emit("interviewer-closed-room", roomCode);
     try {
-      await api.post(`/rooms/close/${roomCode}`);
+      await api.post(`/sessions/close/${roomCode}`);
     } catch (error) {
       console.error("Failed to close room:", error);
     } finally {
@@ -137,11 +137,19 @@ function RoomDashboard() {
       try {
         const [userRes, roomRes] = await Promise.all([
           api.get("/users/current-user"),
-          api.get(`/rooms/details/${roomCode}`),
+          api.get(`/sessions/details/${roomCode}`),
         ]);
 
         const user = userRes.data.data;
-        const roomData = roomRes.data.data;
+        const sessData = roomRes.data.data;
+        
+        // Normalize session data to match what RoomDashboard expects
+        const roomData = {
+          ...sessData,
+          roomCode: sessData.sessionCode,
+          problems: sessData.problemIds || [],
+          participants: [],
+        };
 
         setCurrentUser(user);
         setRoom(roomData);
