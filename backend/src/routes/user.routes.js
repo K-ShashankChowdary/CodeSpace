@@ -7,6 +7,7 @@ import {
   refreshAccessToken,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { verifyJWTOrGuest } from "../middlewares/guestAuth.middleware.js";
 
 const router = Router();
 
@@ -17,7 +18,7 @@ router.route("/refresh-token").post(refreshAccessToken); // no auth needed since
 
 // protected routes (require valid JWT)
 router.route("/logout").post(verifyJWT, logoutUser);
-router.route("/me").get(verifyJWT, getCurrentUser);             // used by App.jsx to check if session is valid
-router.route("/current-user").get(verifyJWT, getCurrentUser);   // used by IDE to get username for leaderboard
+router.route("/me").get(verifyJWTOrGuest, getCurrentUser);             // used by App.jsx to check if session is valid
+router.route("/current-user").get(verifyJWTOrGuest, getCurrentUser);   // used by IDE to get username for leaderboard
 
 export default router;
