@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "../services/api";
 import CodeEditor from "../components/CodeEditor";
+import MultiplayerCursors from "../components/MultiplayerCursors";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
@@ -85,10 +86,19 @@ function IDE() {
         setCurrentUser(user);
 
         const probRes = await api.get(`/problems/${id}`);
-        setProblem(probRes.data.data || null);
+        const problemData = probRes.data.data || null;
+        setProblem(problemData);
+
+        // Safely restore the user's previously written code for this specific problem
+        // if they had navigated away, or fallback to the problem's boilerplate.
+        const savedCode = sessionStorage.getItem(`session-${activeRoomCode}-problem-${id}`);
+        if (savedCode) {
+          setCode(savedCode);
+        } else if (problemData?.boilerplate) {
+          setCode(problemData.boilerplate["C++ 17"]);
+        }
 
         if (activeRoomCode) {
-          // Fetch from /sessions/details if it's a guest session, else /rooms/details
           let roomData;
           if (sessionCode) {
             const sessRes = await api.get(`/sessions/details/${activeRoomCode}`);
@@ -106,13 +116,15 @@ function IDE() {
           }
           setRoom(roomData);
 
-          const interviewerId = roomData.interviewer._id?.toString();
+          const interviewerId = roomData.interviewer?._id?.toString() || roomData.interviewer?.toString();
           const currentUserId = user._id?.toString();
           const userIsInterviewer = !user.isGuest && interviewerId === currentUserId;
           setIsInterviewer(userIsInterviewer);
 
           const emitJoinRoom = () => {
-            if (!socket.connected) socket.connect();
+            if (!socket.connected) {
+              socket.connect();
+            }
             socket.emit("join-room", {
               roomCode: activeRoomCode,
               username: user.username,
@@ -136,10 +148,6 @@ function IDE() {
 
     return () => {
       socket.off("connect");
-      socket.off("candidate-joined");
-      socket.off("candidate-left");
-      socket.off("leaderboard-update");
-      socket.off("room-closed");
     };
   }, [id, activeRoomCode, navigate]);
 
@@ -150,10 +158,11 @@ function IDE() {
     if (!activeRoomCode || !isInterviewer) return;
 
     const handleCandidateJoined = (candidate) => {
-      showToast(`Candidate joined: ${candidate.username}`, "info");
       setRoom((prev) => {
         if (!prev) return prev;
         if (prev.participants.some((p) => p._id === candidate._id)) return prev;
+        
+        showToast(`Candidate joined: ${candidate.username}`, "info");
         return { ...prev, participants: [...prev.participants, candidate] };
       });
     };
@@ -207,16 +216,25 @@ function IDE() {
     socket.off("candidate-joined");
     socket.off("candidate-left");
 
+    const handleSyncParticipants = (participants) => {
+      setRoom((prev) => {
+        if (!prev) return prev;
+        return { ...prev, participants };
+      });
+    };
+
     socket.on("sync-entire-leaderboard", handleSyncLeaderboard);
     socket.on("leaderboard-update", handleLeaderboardUpdate);
     socket.on("candidate-joined", handleCandidateJoined);
     socket.on("candidate-left", handleCandidateLeft);
+    socket.on("sync-participants", handleSyncParticipants);
 
     return () => {
       socket.off("sync-entire-leaderboard", handleSyncLeaderboard);
       socket.off("leaderboard-update", handleLeaderboardUpdate);
       socket.off("candidate-joined", handleCandidateJoined);
       socket.off("candidate-left", handleCandidateLeft);
+      socket.off("sync-participants", handleSyncParticipants);
     };
   }, [isInterviewer, activeRoomCode, id]);
 
@@ -225,18 +243,16 @@ function IDE() {
     if (isInterviewer || !activeRoomCode) return;
 
     const handleRoomClosed = () => {
-      showToast("The interviewer has closed the session. Exiting...", "error", 3000);
-      setTimeout(() => {
-        if (currentUser?.isGuest) {
-          localStorage.removeItem("guestToken");
-          navigate("/auth");
-        } else {
-          navigate("/");
-        }
-      }, 3000);
+      if (currentUser?.isGuest) {
+        localStorage.removeItem("guestToken");
+      }
+      navigate("/interview-ended");
     };
 
     const handleForceNavigate = (newProblemId) => {
+      if (monacoEditorRef.current) {
+        sessionStorage.setItem(`session-${activeRoomCode}-problem-${id}`, monacoEditorRef.current.getValue());
+      }
       showToast("Interviewer moved to another problem. Syncing...", "info", 2000);
       navigate(`/problem/${newProblemId}?session=${activeRoomCode}`);
     };
@@ -248,7 +264,16 @@ function IDE() {
       socket.off("room-closed", handleRoomClosed);
       socket.off("force-navigate-problem", handleForceNavigate);
     };
-  }, [isInterviewer, activeRoomCode, navigate, currentUser]);
+  }, [isInterviewer, activeRoomCode, navigate, currentUser, id]);
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const response = await api.get(`/submissions/history/${id}`);
+      setHistory(Array.isArray(response.data.data) ? response.data.data : []);
+    } catch (error) {
+      setHistory([]);
+    }
+  }, [id]);
 
   // Sync ref for polling and auto-fetch history
   useEffect(() => {
@@ -256,7 +281,7 @@ function IDE() {
   }, [activeTab]);
   useEffect(() => {
     if (activeTab === "submissions") fetchHistory();
-  }, [activeTab]);
+  }, [activeTab, fetchHistory]);
 
   useEffect(() => {
     const handleJobVerdict = (jobData) => {
@@ -264,6 +289,7 @@ function IDE() {
       setOutput(jobData.output || "");
       setIsRunning(false);
       setIsSubmitting(false);
+      if (activeRoomCode) socket.emit("sync-execution-result", jobData);
 
       if (lastExecutionTypeRef.current === "submit") {
         if (activeTabRef.current === "submissions") {
@@ -282,18 +308,35 @@ function IDE() {
     };
 
     socket.on("job-verdict", handleJobVerdict);
-    return () => socket.off("job-verdict", handleJobVerdict);
-  }, [id, activeRoomCode, currentUser]);
+
+    const handleSyncStart = (data) => {
+      data.type === "run" ? setIsRunning(true) : setIsSubmitting(true);
+      setStatus("Queued");
+      setOutput("Processing...");
+      setActiveTab("console");
+      setActiveTestCase(0);
+    };
+
+    const handleSyncResult = (jobData) => {
+      setStatus(jobData.status);
+      setOutput(jobData.output || "");
+      setIsRunning(false);
+      setIsSubmitting(false);
+      setActiveTab("console");
+    };
+
+    socket.on("sync-execution-start", handleSyncStart);
+    socket.on("sync-execution-result", handleSyncResult);
+
+    return () => {
+      socket.off("job-verdict", handleJobVerdict);
+      socket.off("sync-execution-start", handleSyncStart);
+      socket.off("sync-execution-result", handleSyncResult);
+    };
+  }, [id, activeRoomCode, currentUser, fetchHistory]);
 
 
-  const fetchHistory = async () => {
-    try {
-      const response = await api.get(`/submissions/history/${id}`);
-      setHistory(Array.isArray(response.data.data) ? response.data.data : []);
-    } catch (error) {
-      setHistory([]);
-    }
-  };
+  // Removed old fetchHistory location
 
   const handleLogout = async () => {
     try {
@@ -309,22 +352,27 @@ function IDE() {
     }
   };
 
+  const [showEndModal, setShowEndModal] = useState(false);
+
   const handleCloseRoom = async () => {
     if (!activeRoomCode) {
       navigate("/");
       return;
     }
-    if (window.confirm("Are you sure you want to end this interview for all participants?")) {
-      try {
+    try {
+      if (sessionCode) {
         await api.post(`/sessions/close/${activeRoomCode}`);
-        if (!socket.connected) socket.connect();
-        socket.emit("interviewer-closed-room", activeRoomCode);
-        showToast("Interview ended successfully", "success");
-        navigate("/");
-      } catch (err) {
-        console.error("Failed to close room:", err);
-        showToast("Failed to close interview", "error");
+      } else {
+        await api.post(`/rooms/close/${activeRoomCode}`);
       }
+      
+      if (!socket.connected) socket.connect();
+      socket.emit("interviewer-closed-room", activeRoomCode);
+      showToast("Interview ended successfully", "success");
+      navigate("/interview-ended?role=interviewer");
+    } catch (err) {
+      console.error("Failed to close room:", err);
+      showToast("Failed to close interview", "error");
     }
   };
 
@@ -350,6 +398,7 @@ function IDE() {
       const jobId = response.data.data.jobId;
       if (!socket.connected) socket.connect();
       socket.emit("subscribe-job", jobId);
+      if (activeRoomCode) socket.emit("sync-execution-start", { type });
     } catch (error) {
       setStatus("Error");
       setIsRunning(false);
@@ -537,7 +586,35 @@ function IDE() {
   // --- VIEW 2: CANDIDATE VIEW (Full IDE) ---
   // ==========================================
   return (
-    <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
+    <>
+      {showEndModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-red-500/50"></div>
+            <h3 className="text-lg font-black text-white mb-2">End Interview?</h3>
+            <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+              Are you sure you want to end this interview? This will permanently close the session and disconnect all participants.
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <Button variant="ghost" onClick={() => setShowEndModal(false)}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={() => {
+                setShowEndModal(false);
+                handleCloseRoom();
+              }}>
+                Yes, End Interview
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {activeRoomCode && currentUser && (
+        <MultiplayerCursors activeRoomCode={activeRoomCode} currentUser={currentUser} />
+      )}
+
+      <div className="h-screen w-screen bg-[#050505] flex flex-col font-sans text-zinc-200 overflow-hidden relative">
       {toast && (
         <Toast
           message={toast.message}
@@ -580,6 +657,9 @@ function IDE() {
                 value={id}
                 onChange={(e) => {
                   const newId = e.target.value;
+                  if (monacoEditorRef.current) {
+                    sessionStorage.setItem(`session-${activeRoomCode}-problem-${id}`, monacoEditorRef.current.getValue());
+                  }
                   if (!socket.connected) socket.connect();
                   socket.emit("interviewer-changed-problem", { roomCode: activeRoomCode, problemId: newId });
                   navigate(`/problem/${newId}?session=${activeRoomCode}`);
@@ -649,34 +729,7 @@ function IDE() {
               </span>
             </div>
           </div>
-          {/* Interviewer-only: live candidate status for this problem */}
-          {activeRoomCode && isInterviewer && (
-            <div className="flex items-center gap-2 bg-zinc-900/50 px-3 py-1.5 rounded-lg border border-zinc-800/60 shadow-inner">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                Candidate
-              </span>
-              {Object.keys(liveStatuses).length === 0 ? (
-                <span className="text-[10px] text-zinc-600 font-mono">—</span>
-              ) : (
-                Object.entries(liveStatuses).map(([username, st]) => (
-                  <div key={username} className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-400 font-bold">{username}</span>
-                    <span
-                      className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${
-                        st === "AC"
-                          ? "bg-green-500/10 border-green-500/20 text-green-400"
-                          : ["WA", "TLE", "CE", "RE", "MLE"].includes(st)
-                          ? "bg-red-500/10 border-red-500/20 text-red-400"
-                          : "bg-blue-500/10 border-blue-500/20 text-blue-400"
-                      }`}
-                    >
-                      {st}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
+
           {activeRoomCode && isInterviewer && (
             <>
               <Button
@@ -694,10 +747,9 @@ function IDE() {
                 Copy Link
               </Button>
               <Button
-                variant="primary"
+                variant="danger"
                 size="sm"
-                onClick={handleCloseRoom}
-                className="!bg-red-500/10 !text-red-500 !border-red-500/20 hover:!bg-red-500/20"
+                onClick={() => setShowEndModal(true)}
               >
                 End Interview
               </Button>
@@ -708,10 +760,9 @@ function IDE() {
               variant="secondary"
               size="sm"
               onClick={() => {
-                showToast("exiting room...", "info", 1500);
                 if (!socket.connected) socket.connect();
                 socket.emit("leave-room", activeRoomCode);
-                setTimeout(() => navigate("/"), 1500);
+                navigate("/interview-ended?role=candidate-exit");
               }}
             >
               Exit Interview
@@ -837,10 +888,11 @@ function IDE() {
             </div>
             <div className="flex-1 bg-[#050505] overflow-hidden relative">
               <CodeEditor 
+                key={id}
                 code={code} 
                 setCode={setCode} 
                 language="cpp" 
-                roomCode={activeRoomCode}
+                roomCode={activeRoomCode ? `${activeRoomCode}-${id}` : null}
                 currentUser={currentUser}
                 isInterviewer={isInterviewer}
                 onMount={(editor) => monacoEditorRef.current = editor}
@@ -879,6 +931,7 @@ function IDE() {
         </div>
       </div>
     </div>
+    </>
   );
 }
 

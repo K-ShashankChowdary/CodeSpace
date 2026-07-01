@@ -41,7 +41,9 @@ const Auth = () => {
       if (isLogin) {
         showToast("Logged in successfully!", "success");
         setTimeout(() => {
-          window.location.href = "/"; // hard reload to trigger fresh auth check in App.jsx
+          const urlParams = new URLSearchParams(window.location.search);
+          const returnTo = urlParams.get("returnTo") || "/";
+          window.location.href = returnTo;
         }, 1000);
       } else {
         showToast("Account created! Please log in.", "success");

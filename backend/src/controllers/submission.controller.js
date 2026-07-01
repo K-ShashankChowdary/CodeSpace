@@ -30,7 +30,8 @@ const submitCode = asyncHandler(async (req, res) => {
     // create a pending submission record, the C++ worker updates it once done
     const submission = await Submission.create({
         problemId,
-        userId: req.user._id,
+        userId: req.user._id || undefined, // undefined avoids null casting issues in some mongoose versions
+        sessionId: req.user.sessionId || undefined,
         code,
         language,
         status: "Pending"
@@ -65,7 +66,7 @@ const getSubmissionStatus = asyncHandler(async (req, res) => {
     }
 
     // prevent users from viewing other users' submissions (IDOR protection)
-    if (submission.userId.toString() !== req.user._id.toString()) {
+    if (submission.userId?.toString() !== req.user._id?.toString() && submission.sessionId?.toString() !== req.user.sessionId?.toString()) {
         throw new ApiError(403, "You do not have permission to view this submission");
     }
 
@@ -81,11 +82,17 @@ const getUserSubmissions = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid problem ID format");
     }
 
-    // explicit ObjectId casting to prevent string-vs-ObjectId mismatches
-    const submissions = await Submission.find({
-        problemId: new mongoose.Types.ObjectId(problemId),
-        userId: new mongoose.Types.ObjectId(req.user._id)
-    }).sort({ createdAt: -1 });
+    const query = {
+        problemId: new mongoose.Types.ObjectId(problemId)
+    };
+    
+    if (req.user._id) {
+        query.userId = new mongoose.Types.ObjectId(req.user._id);
+    } else if (req.user.sessionId) {
+        query.sessionId = req.user.sessionId;
+    }
+
+    const submissions = await Submission.find(query).sort({ createdAt: -1 });
 
     return res.status(200).json(
         new ApiResponse(200, submissions, "History fetched")

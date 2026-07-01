@@ -10,7 +10,11 @@ const submissionSchema = new Schema(
         userId: {
             type: Schema.Types.ObjectId,
             ref: "User",
-            required: true
+            required: false // Optional to allow guest submissions
+        },
+        sessionId: {
+            type: String,   // Added for guest submissions
+            required: false
         },
         code: {
             type: String,

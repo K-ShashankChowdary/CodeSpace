@@ -2,6 +2,7 @@ import { Problem } from "../models/problem.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import mongoose from "mongoose";
 
 const getAllProblems = asyncHandler(async (req, res) => {
     // exclude heavy fields for the Dashboard list view
@@ -14,6 +15,11 @@ const getAllProblems = asyncHandler(async (req, res) => {
 
 const getProblemById = asyncHandler(async (req, res) => {
     const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new ApiError(400, "Invalid problem ID format");
+    }
+
     const problem = await Problem.findById(id).lean();
 
     if (!problem) {

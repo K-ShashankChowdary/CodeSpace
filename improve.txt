@@ -1,7 +1,7 @@
 # CodeSpace — Improvement Backlog
 # Vision: Free, open-source technical interview platform (CoderPad alternative)
 # Pitch: "Run real coding interviews without paying $50/seat/month"
-# Last updated: June 15 2026
+# Last updated: June 22 2026
 
 =============================================================
 THE INTERVIEW PLATFORM PIVOT (CURRENT FOCUS)
@@ -47,6 +47,15 @@ To complete the MVP for the resume, the following features must be executed:
 [FEAT-6] Built-in Video Call
 → Problem: Requires a separate Zoom link.
 → Architecture: Embed a Daily.co iframe into a resizable side panel next to the code editor.
+
+[FEAT-7] Public Landing Page
+→ Problem: The app has no public-facing page. Unauthenticated users hit the login form with zero context about what CodeSpace is.
+→ Architecture:
+  1. New route `/landing` (or `/`) for unauthenticated users — full-screen hero, feature highlights, and CTA.
+  2. Sections: Hero (headline + CTA), Features (collaborative editor, real-time verdict, problem bank), How It Works, and Footer.
+  3. CTA "Start Interviewing" links to `/auth`.
+  4. Scroll-driven animations for section reveals, glassmorphism panels, neon accents matching the app's dark theme.
+→ Done when: A recruiter can land on the page, understand the product in 10 seconds, and click through to sign up.
 
 =============================================================
 RELIABILITY & ENGINE POLISH

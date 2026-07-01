@@ -28,9 +28,10 @@ api.interceptors.response.use(
         // also skip retry if we're in a guest session (no refresh token exists)
         const skipRetryUrls = ['/users/refresh-token', '/users/logout', '/users/login', '/users/register', '/sessions/guest-join'];
         const shouldSkip = skipRetryUrls.some(url => originalRequest.url?.includes(url));
+        const isGuestRoute = window.location.pathname.startsWith('/join/');
         const isGuest = !!localStorage.getItem("guestToken");
 
-        if (error.response?.status === 401 && !originalRequest._retry && !shouldSkip && !isGuest) {
+        if (error.response?.status === 401 && !originalRequest._retry && !shouldSkip && !isGuest && !isGuestRoute) {
             originalRequest._retry = true;
 
             try {
@@ -38,7 +39,7 @@ api.interceptors.response.use(
                 return api(originalRequest);
             } catch (refreshError) {
                 console.error("Session expired. Please log in again.");
-                if (window.location.pathname !== '/auth') {
+                if (window.location.pathname !== '/auth' && !isGuestRoute) {
                     window.location.href = '/auth';
                 }
                 return Promise.reject(refreshError);

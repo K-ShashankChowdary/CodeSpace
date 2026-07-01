@@ -150,8 +150,12 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
 
     // If we are the first to sync and the document is empty, insert the default code template
     provider.on('sync', (isSynced) => {
-      if (isSynced && ytext.toString() === '') {
-        ytext.insert(0, code);
+      if (isSynced && ytext.length === 0) {
+        // To prevent race conditions where both clients sync an empty doc and both seed it simultaneously
+        // (causing duplication), we only allow the interviewer to seed the multiplayer document.
+        if (!roomCode || isInterviewer) {
+          ytext.insert(0, code);
+        }
       }
     });
   };
@@ -256,7 +260,7 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
         beforeMount={handleEditorWillMount}
         onMount={handleEditorDidMount}
         defaultLanguage={language}
-        defaultValue={code}
+        defaultValue={roomCode ? "" : code}
         onChange={handleEditorChange}
         options={editorOptions}
         loading={<div className="text-zinc-500 p-8 font-black uppercase text-[10px] tracking-widest animate-pulse">Initializing Editor...</div>}

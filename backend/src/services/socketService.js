@@ -30,6 +30,9 @@ export const initializeSockets = (httpServer) => {
   io.use((socket, next) => {
     try {
       let token = socket.handshake.auth?.token;
+      
+      // If an explicit guest token was provided in auth, use it (and don't fallback to the cookie).
+      // Otherwise, check for the httpOnly cookie for authenticated users.
       if (!token && socket.handshake.headers.cookie) {
         const cookies = Object.fromEntries(
           socket.handshake.headers.cookie
@@ -38,10 +41,18 @@ export const initializeSockets = (httpServer) => {
         );
         token = cookies.accessToken;
       }
+      
       if (!token) return next(new Error("Auth Error"));
+      
+      // Since we use the same secret for both guest and access tokens, verify works for both.
       const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+      
+      // If it's a guest token, decoded._id will be undefined. 
+      // If it's a regular token, decoded._id will be set.
       socket.data.userId = decoded._id;
-      socket.data.username = decoded.username;
+      socket.data.username = decoded.username || decoded.name; // Guest tokens use 'name' instead of 'username'
+      socket.data.isGuest = decoded.type === "guest";
+      
       next();
     } catch (err) {
       console.log("Socket Auth Error:", err.message);
@@ -114,10 +125,20 @@ export const initializeSockets = (httpServer) => {
             }));
             socket.emit("sync-entire-leaderboard", allProgress);
           }
-          // Note: for 1:1 sessions we don't have a global leaderboard to sync on join yet
+          
+          // Sync all currently connected candidates for the interviewer (solves the refresh issue)
+          const socketsInRoom = await io.in(roomCode).fetchSockets();
+          const activeParticipants = socketsInRoom
+            .filter(s => s.id !== socket.id && !s.data.isInterviewer && s.data.username)
+            .map(s => ({
+              _id: s.data.userId || s.data.username,
+              username: s.data.username
+            }));
+          
+          socket.emit("sync-participants", activeParticipants);
         } else {
           socket.to(roomCode).emit("candidate-joined", {
-            _id: socket.data.userId,
+            _id: socket.data.userId || socket.data.username,
             username: socket.data.username,
           });
         }
@@ -144,6 +165,8 @@ export const initializeSockets = (httpServer) => {
         if (!entity) return;
 
         if (!isSession) {
+          if (!socket.data.userId) return; // Guests cannot interact with legacy multi-user Rooms
+          
           let progress = entity.candidateProgress.find(
             (p) => p.candidateId.toString() === socket.data.userId.toString()
           );
@@ -190,12 +213,24 @@ export const initializeSockets = (httpServer) => {
       }
     });
 
+    socket.on("sync-execution-start", (data) => {
+      if (socket.data.roomCode) {
+        socket.to(socket.data.roomCode).emit("sync-execution-start", data);
+      }
+    });
+
+    socket.on("sync-execution-result", (data) => {
+      if (socket.data.roomCode) {
+        socket.to(socket.data.roomCode).emit("sync-execution-result", data);
+      }
+    });
+
     // CANDIDATE LEAVING LOGIC
     socket.on("disconnect", () => {
       const { roomCode, userId, username, isInterviewer } = socket.data;
-      if (roomCode && userId && !isInterviewer) {
+      if (roomCode && !isInterviewer) {
         console.log(`👤 Candidate Left: ${username} from ${roomCode}`);
-        socket.to(roomCode).emit("candidate-left", { _id: userId, username });
+        socket.to(roomCode).emit("candidate-left", { _id: userId || username, username });
       }
     });
   });

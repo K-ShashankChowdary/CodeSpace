@@ -12,6 +12,10 @@ export const socket = io(SOCKET_URL, {
   withCredentials: true,
   autoConnect: false,
   transports: ["polling", "websocket"],
+  auth: (cb) => {
+    const guestToken = localStorage.getItem("guestToken");
+    cb(guestToken ? { token: guestToken } : {});
+  }
 });
 
 socket.on("connect", () => console.log(`[Socket] Connected: ${socket.id}`));

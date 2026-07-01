@@ -4,12 +4,12 @@ import {
     getSubmissionStatus, 
     getUserSubmissions 
 } from "../controllers/submission.controller.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { verifyJWTOrGuest } from "../middlewares/guestAuth.middleware.js";
 
 const router = Router();
 
 // all submission routes require authentication
-router.use(verifyJWT);
+router.use(verifyJWTOrGuest);
 
 router.route("/submit").post(submitCode);                  // queues code for execution
 router.route("/status/:id").get(getSubmissionStatus);      // frontend polls this until result is ready

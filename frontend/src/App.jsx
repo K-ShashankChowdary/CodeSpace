@@ -6,6 +6,7 @@ import IDE from "./pages/IDE";
 import Dashboard from "./pages/Dashboard";
 import RoomDashboard from "./pages/RoomDashboard";
 import GuestJoin from "./pages/GuestJoin";
+import InterviewEnded from "./pages/InterviewEnded";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Spinner from "./components/ui/Spinner";
 import { socket } from "./utils/socket";
@@ -15,14 +16,23 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
   const location = useLocation();
 
-  // /join/* routes are fully public — skip auth check entirely
-  const isGuestRoute = location.pathname.startsWith("/join/");
+  // /join/* and /interview-ended routes are fully public — skip auth check entirely
+  const isGuestRoute = location.pathname.startsWith("/join/") || location.pathname === "/interview-ended";
 
   useEffect(() => {
     if (isGuestRoute) return; // don't hit /users/me for guest pages
     const checkAuthStatus = async () => {
       try {
-        await api.get("/users/me");
+        const res = await api.get("/users/me");
+        const user = res.data.data;
+
+        // Restrict guest access strictly to the interview workspace
+        if (user.isGuest && !location.pathname.startsWith("/problem/")) {
+          localStorage.removeItem("guestToken");
+          setIsAuthenticated(false);
+          return;
+        }
+
         setIsAuthenticated(true);
         if (!socket.connected) {
           socket.connect();
@@ -40,6 +50,7 @@ function App() {
       <ErrorBoundary>
         <Routes>
           <Route path="/join/:sessionCode" element={<GuestJoin />} />
+          <Route path="/interview-ended" element={<InterviewEnded />} />
         </Routes>
       </ErrorBoundary>
     );
@@ -62,6 +73,7 @@ function App() {
         {/* /problem/:id accessible to both logged-in users and guests (guest has guestToken in localStorage) */}
         <Route path="/problem/:id" element={isAuthenticated || localStorage.getItem("guestToken") ? <IDE /> : <Navigate to="/auth" />} />
         <Route path="/auth" element={!isAuthenticated ? <Auth /> : <Navigate to="/" />} />
+        <Route path="/interview-ended" element={<InterviewEnded />} />
         <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/auth"} />} />
       </Routes>
     </ErrorBoundary>
