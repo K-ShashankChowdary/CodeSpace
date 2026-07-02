@@ -76,6 +76,16 @@ TECH DEBT (Low Priority)
 → `room.controller.js` runs `await Room.findOne()` inside a loop. Use `nanoid` and MongoDB unique index instead.
 
 =============================================================
+FUTURE EXPLORATION (CoderPad Features)
+=============================================================
+- [LANG-EXT] Support for TypeScript (via tsx) and Go.
+- [LANG-DB] Support for SQL execution against an in-memory database.
+- [FEAT-PLAYBACK] Interview Playback (Keystroke History) to replay the interview after it ends.
+- [FEAT-WHITEBOARD] Integrated Whiteboard (e.g., Excalidraw) for System Design interviews.
+- [FEAT-HARDMODE] "Hard Mode" toggle for interviewers to disable autocomplete/syntax highlighting.
+- [FEAT-SCORECARD] Interviewer Scorecard & Notes panel for private grading and export.
+
+=============================================================
 COMPLETED ARCHIVE
 =============================================================
 ✅ [FEAT-2] Session Data Model & Guest Auth Flow
