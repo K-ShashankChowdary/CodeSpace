@@ -319,6 +319,7 @@ function IDE() {
       setOutput("Processing...");
       setActiveTab("console");
       setActiveTestCase(0);
+      showToast(`Remote user is ${data.type === "run" ? "running" : "submitting"} code...`, "info");
     };
 
     const handleSyncResult = (jobData) => {
