@@ -113,7 +113,7 @@ export default function MultiplayerCursors({ activeRoomCode, currentUser }) {
             
             {/* Username Pill */}
             <div
-              className="px-3 py-1 rounded-full text-[11px] font-black tracking-widest text-white whitespace-nowrap -mt-2 ml-4 backdrop-blur-md border border-white/20 uppercase shadow-lg"
+              className="px-3 py-1 rounded-full text-[11px] font-black tracking-widest text-white whitespace-nowrap mt-1 ml-4 backdrop-blur-md border border-white/20 uppercase shadow-lg"
               style={{ 
                 backgroundColor: `${color}E6`, // 90% opacity
                 boxShadow: `0 4px 15px ${color}66`,

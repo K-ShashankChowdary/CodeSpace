@@ -17,8 +17,10 @@ body {
 }
 
 /* Base Headings - Tighter Tracking for Premium Feel */
-h1, h2, h3, h4 {
-  @apply tracking-tight text-white;
+@layer base {
+  h1, h2, h3, h4 {
+    @apply tracking-tight text-white;
+  }
 }
 
 /* Custom Thin Professional Scrollbar */
@@ -46,6 +48,10 @@ h1, h2, h3, h4 {
 
 .glass-card {
   @apply bg-gradient-to-br from-white/[0.03] to-transparent backdrop-blur-lg border border-white/[0.05] shadow-xl hover:border-white/[0.1] transition-all;
+}
+
+.shape-gem {
+  clip-path: polygon(4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px), 0 4px);
 }
 
 .text-gradient {

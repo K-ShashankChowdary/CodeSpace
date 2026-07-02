@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "../services/api";
 import CodeEditor from "../components/CodeEditor";
+import ProblemDropdown from "../components/ui/ProblemDropdown";
+import CountdownButton from "../components/ui/CountdownButton";
 import MultiplayerCursors from "../components/MultiplayerCursors";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
@@ -12,6 +14,71 @@ import Toast from "../components/ui/Toast";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { socket } from "../utils/socket";
+
+const TerminalLoader = () => {
+  const [lines, setLines] = useState([]);
+  
+  const sequence = [
+    "> Initiating connection to execution engine...",
+    "> Handshake successful. Secure channel established.",
+    "> Uploading source code payload to backend server...",
+    "> Spawning isolated sandboxed container...",
+    "> Allocating CPU and memory limits...",
+    "> Compiling source code...",
+    "> Executing test cases...",
+    "> Awaiting execution results...",
+    "> Fetching verdicts...",
+    "> Processing output stream..."
+  ];
+  
+  useEffect(() => {
+    let currentLine = 0;
+    const interval = setInterval(() => {
+      if (currentLine < sequence.length) {
+        setLines(prev => [...prev, sequence[currentLine]]);
+        currentLine++;
+      } else {
+        clearInterval(interval);
+      }
+    }, 350);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex flex-col h-full w-full bg-[#050505] p-5 rounded-xl font-mono text-xs overflow-hidden border border-white/5 relative shadow-inner">
+      <div className="flex items-center gap-2 mb-4 border-b border-white/5 pb-3">
+        <div className="w-3 h-3 rounded-full bg-rose-500/80 shadow-[0_0_8px_rgba(244,63,94,0.4)]"></div>
+        <div className="w-3 h-3 rounded-full bg-amber-500/80 shadow-[0_0_8px_rgba(251,191,36,0.4)]"></div>
+        <div className="w-3 h-3 rounded-full bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+        <span className="ml-3 text-zinc-500 text-[10px] uppercase tracking-widest font-black">Execution Terminal</span>
+      </div>
+      
+      <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-2 pt-1">
+        {lines.map((line, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, x: -5 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-start gap-3"
+          >
+            <span className="text-zinc-600 shrink-0 select-none">
+              {new Date().toISOString().split('T')[1].slice(0, 8)}
+            </span>
+            <span className={i === sequence.length - 1 ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] animate-pulse" : "text-emerald-400/90 drop-shadow-[0_0_5px_rgba(52,211,153,0.3)]"}>
+              {line}
+            </span>
+          </motion.div>
+        ))}
+        <motion.div
+          animate={{ opacity: [1, 0] }}
+          transition={{ repeat: Infinity, duration: 0.8 }}
+          className="w-2 h-3.5 bg-emerald-400 mt-1 ml-1 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+        />
+      </div>
+    </div>
+  );
+};
 
 function IDE() {
   const { id } = useParams();
@@ -26,8 +93,6 @@ function IDE() {
   const [room, setRoom] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [isInterviewer, setIsInterviewer] = useState(false);
-  // eslint-disable-next-line no-unused-vars
-  const [liveStatuses, setLiveStatuses] = useState({});
 
   // Problem & IDE State
   const [problem, setProblem] = useState(null);
@@ -51,8 +116,9 @@ function IDE() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Notification State
-  const [toast, setToast] = useState(null);
+  const monacoEditorRef = useRef(null);
   const lastExecutionTypeRef = useRef(null);
+  const lastExecutionTimeRef = useRef(null);
 
   const showToast = (message, type = "info") => {
     setToast({ message, type });
@@ -192,7 +258,6 @@ function IDE() {
           loadedStatuses[p.username] = p.results[id];
         }
       });
-      setLiveStatuses(loadedStatuses);
     };
 
     const handleLeaderboardUpdate = (data) => {
@@ -208,11 +273,7 @@ function IDE() {
           showToast(`${data.username} submitted: ${data.status}`, "error");
         }
       }
-
-      // Update the visual leaderboard UI ONLY if the interviewer is looking at this exact problem
-      if (data.problemId === id) {
-        setLiveStatuses((prev) => ({ ...prev, [data.username]: data.status }));
-      }
+      // UI leaderboard update removed
     };
     socket.off("sync-entire-leaderboard");
     socket.off("leaderboard-update");
@@ -289,26 +350,32 @@ function IDE() {
 
   useEffect(() => {
     const handleJobVerdict = (jobData) => {
-      setStatus(jobData.status);
-      setOutput(jobData.output || "");
-      setIsRunning(false);
-      setIsSubmitting(false);
-      if (activeRoomCode) socket.emit("sync-execution-result", jobData);
+      const minLoadingTime = 3000;
+      const elapsedTime = Date.now() - (lastExecutionTimeRef.current || Date.now());
+      const delay = Math.max(0, minLoadingTime - elapsedTime);
 
-      if (lastExecutionTypeRef.current === "submit") {
-        if (activeTabRef.current === "submissions") {
-          fetchHistory();
+      setTimeout(() => {
+        setStatus(jobData.status);
+        setOutput(jobData.output || "");
+        setIsRunning(false);
+        setIsSubmitting(false);
+        if (activeRoomCode) socket.emit("sync-execution-result", jobData);
+
+        if (lastExecutionTypeRef.current === "submit") {
+          if (activeTabRef.current === "submissions") {
+            fetchHistory();
+          }
+          if (activeRoomCode && currentUser) {
+            if (!socket.connected) socket.connect();
+            socket.emit("candidate-submission", {
+              roomCode: activeRoomCode,
+              username: currentUser.username,
+              status: jobData.status,
+              problemId: id,
+            });
+          }
         }
-        if (activeRoomCode && currentUser) {
-          if (!socket.connected) socket.connect();
-          socket.emit("candidate-submission", {
-            roomCode: activeRoomCode,
-            username: currentUser.username,
-            status: jobData.status,
-            problemId: id,
-          });
-        }
-      }
+      }, delay);
     };
 
     socket.on("job-verdict", handleJobVerdict);
@@ -319,7 +386,8 @@ function IDE() {
       setOutput("Processing...");
       setActiveTab("console");
       setActiveTestCase(0);
-      showToast(`Remote user is ${data.type === "run" ? "running" : "submitting"} code...`, "info");
+      const role = isInterviewer ? "Candidate" : "Interviewer";
+      showToast(`${role} is ${data.type === "run" ? "running" : "submitting"} code...`, "info");
     };
 
     const handleSyncResult = (jobData) => {
@@ -338,7 +406,7 @@ function IDE() {
       socket.off("sync-execution-start", handleSyncStart);
       socket.off("sync-execution-result", handleSyncResult);
     };
-  }, [id, activeRoomCode, currentUser, fetchHistory]);
+  }, [id, activeRoomCode, currentUser, fetchHistory, isInterviewer]);
 
 
   // Removed old fetchHistory location
@@ -358,6 +426,7 @@ function IDE() {
   };
 
   const [showEndModal, setShowEndModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   const handleCloseRoom = async () => {
     if (!activeRoomCode) {
@@ -387,6 +456,7 @@ function IDE() {
     if (!currentCode.trim()) return;
     
     lastExecutionTypeRef.current = type;
+    lastExecutionTimeRef.current = Date.now();
     type === "run" ? setIsRunning(true) : setIsSubmitting(true);
     setStatus("Queued");
     setOutput("Processing...");
@@ -426,10 +496,20 @@ function IDE() {
   const renderConsoleContent = () => {
     if (!output)
       return (
-        <p className="text-sm font-mono text-zinc-500 italic mt-2">
-          Run code to see output...
-        </p>
+        <div className="flex items-center justify-center h-full">
+          <p className="text-sm font-mono text-zinc-600 italic">
+            Run code to see output...
+          </p>
+        </div>
       );
+
+    if (output === "Processing...") {
+      return (
+        <div className="h-full w-full">
+          <TerminalLoader />
+        </div>
+      );
+    }
 
     let parsedResults = null;
     if (Array.isArray(output)) {
@@ -441,93 +521,134 @@ function IDE() {
         // Ignore JSON parse errors
       }
     }
+    const getStatusTheme = (status) => {
+      switch (status) {
+        case "AC":
+          return {
+            text: "text-green-500 drop-shadow-[0_0_12px_rgba(34,197,94,0.4)]",
+            dot: "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]",
+            box: "bg-green-500/10 text-green-300 border border-green-500/20 shadow-[inset_0_0_20px_rgba(34,197,94,0.05)]",
+          };
+        case "TLE":
+          return {
+            text: "text-orange-500 drop-shadow-[0_0_12px_rgba(249,115,22,0.4)]",
+            dot: "bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]",
+            box: "bg-orange-500/10 text-orange-300 border border-orange-500/20 shadow-[inset_0_0_20px_rgba(249,115,22,0.05)]",
+          };
+        case "CE":
+          return {
+            text: "text-yellow-500 drop-shadow-[0_0_12px_rgba(234,179,8,0.4)]",
+            dot: "bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]",
+            box: "bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 shadow-[inset_0_0_20px_rgba(234,179,8,0.05)]",
+          };
+        case "RE":
+        case "WA":
+        default:
+          return {
+            text: "text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.4)]",
+            dot: "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]",
+            box: "bg-red-500/10 text-red-300 border border-red-500/20 shadow-[inset_0_0_20px_rgba(239,68,68,0.05)]",
+          };
+      }
+    };
 
-    if (
-      parsedResults &&
-      Array.isArray(parsedResults) &&
-      parsedResults.length > 0
-    ) {
+    if (parsedResults && Array.isArray(parsedResults) && parsedResults.length > 0) {
       const activeRes = parsedResults[activeTestCase] || parsedResults[0] || {};
       const overallStatus = parsedResults.every((r) => r?.status === "AC")
         ? "AC"
         : parsedResults.find((r) => r?.status !== "AC")?.status || "WA";
 
+      const overallTheme = getStatusTheme(overallStatus);
+      const activeTheme = getStatusTheme(activeRes?.status);
+
       return (
-        <div className="flex flex-col animate-in fade-in duration-300">
-          <div className="mb-6 flex items-baseline gap-4">
-            <h2
-              className={`text-2xl tracking-tight font-bold ${overallStatus === "AC" ? "!text-green-500" : "!text-red-500"}`}
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col h-full"
+        >
+          <div className="mb-6 flex items-baseline justify-between border-b border-white/5 pb-4">
+            <motion.h2
+              initial={{ x: -10, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.1 }}
+              className={`text-xl tracking-tight font-black uppercase ${overallTheme.text}`}
             >
               {getFullStatus(overallStatus)}
-            </h2>
+            </motion.h2>
             {overallStatus === "AC" && activeRes?.time !== undefined && (
-              <span className="text-sm font-medium text-zinc-500">
-                Runtime: {Math.max(...parsedResults.map((r) => r.time || 0))} ms
-              </span>
+              <motion.span 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-xs font-bold text-zinc-400 bg-black/40 px-3 py-1.5 rounded-full border border-white/5"
+              >
+                Runtime: <span className="text-emerald-400">{Math.max(...parsedResults.map((r) => r.time || 0))}ms</span>
+              </motion.span>
             )}
           </div>
-          <div className="flex gap-2 mb-6 overflow-x-auto custom-scrollbar">
-            {parsedResults.map((res, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveTestCase(i)}
-                className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap ${
-                  activeTestCase === i
-                    ? "bg-zinc-800 text-zinc-100"
-                    : "bg-transparent text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
-                }`}
-              >
-                <div
-                  className={`w-1.5 h-1.5 rounded-full ${res?.status === "AC" ? "bg-green-500" : "bg-red-500"}`}
-                ></div>
-                Case {i + 1}
-                {res?.time !== undefined && (
-                  <span
-                    className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-sm font-medium ${
+
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="flex gap-3 mb-6 flex-wrap pb-2"
+          >
+            {parsedResults.map((res, i) => {
+              const theme = getStatusTheme(res?.status);
+              return (
+                <motion.button
+                  key={i}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setActiveTestCase(i)}
+                  className={`relative px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap overflow-visible
+                    ${
                       activeTestCase === i
-                        ? "bg-zinc-700/50 text-zinc-300"
-                        : "bg-zinc-800/30 text-zinc-500"
-                    }`}
-                  >
-                    {res.time} ms
+                        ? "bg-white/10 text-white shadow-[0_0_15px_rgba(255,255,255,0.1)] border border-white/20"
+                        : "bg-transparent text-zinc-500 border border-white/5 hover:bg-white/5 hover:text-zinc-300"
+                    }
+                  `}
+                >
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}
+                  ></div>
+                  Case {i + 1}
+                </motion.button>
+              );
+            })}
+          </motion.div>
+
+          <div className="space-y-4">
+            {[
+              { label: "Input", value: activeRes?.input },
+              { label: "Output", value: activeRes?.actual, isOutput: true, status: activeRes?.status },
+              { label: "Expected", value: activeRes?.expected }
+            ].map((section, idx) => (
+              <motion.div 
+                key={section.label + activeTestCase}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 + (idx * 0.1) }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-1 h-3 rounded-full bg-indigo-500"></div>
+                  <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">
+                    {section.label}
                   </span>
-                )}
-              </button>
+                </div>
+                <div
+                  className={`rounded-xl px-5 py-4 font-mono text-sm whitespace-pre-wrap backdrop-blur-md transition-colors ${
+                    section.isOutput
+                      ? activeTheme.box
+                      : "bg-white/[0.02] text-zinc-300 border border-white/[0.05] shadow-[inset_0_0_20px_rgba(255,255,255,0.01)]"
+                  }`}
+                >
+                  {section.value || "N/A"}
+                </div>
+              </motion.div>
             ))}
           </div>
-          <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
-            <div>
-              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">
-                Input
-              </span>
-              <div className="bg-zinc-900/50 rounded-lg px-4 py-3 font-mono text-sm text-zinc-300 whitespace-pre-wrap border border-zinc-800/50">
-                {activeRes?.input || "N/A"}
-              </div>
-            </div>
-            <div>
-              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">
-                Output
-              </span>
-              <div
-                className={`rounded-lg px-4 py-3 font-mono text-sm whitespace-pre-wrap ${
-                  activeRes?.status === "AC"
-                    ? "bg-zinc-900/50 text-zinc-300 border border-zinc-800/50"
-                    : "bg-red-500/10 text-red-400 border border-red-500/20"
-                }`}
-              >
-                {activeRes?.actual || "N/A"}
-              </div>
-            </div>
-            <div>
-              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">
-                Expected
-              </span>
-              <div className="bg-zinc-900/50 rounded-lg px-4 py-3 font-mono text-sm text-zinc-300 whitespace-pre-wrap border border-zinc-800/50">
-                {activeRes?.expected || "N/A"}
-              </div>
-            </div>
-          </div>
-        </div>
+        </motion.div>
       );
     }
 
@@ -535,47 +656,41 @@ function IDE() {
     let cleanedOutput = "Output formatting failed.";
 
     if (typeof output === "string") {
-      cleanedOutput = output.replace(
-        /[a-f0-9]{24}(_tc\d+)?\.cpp/g,
-        "solution.cpp",
-      );
+      cleanedOutput = output.replace(/[a-f0-9]{24}(_tc\d+)?\.cpp/g, "solution.cpp");
     } else if (typeof output === "object") {
       cleanedOutput = JSON.stringify(output, null, 2);
     }
 
     let outputColorClass = "text-zinc-300";
-    if (
-      status === "AC" ||
-      (typeof cleanedOutput === "string" &&
-        cleanedOutput.toLowerCase().includes("accepted"))
-    ) {
-      outputColorClass = "!text-green-500 font-bold";
-    } else if (
-      isError ||
-      (typeof cleanedOutput === "string" &&
-        (cleanedOutput.toLowerCase().includes("wrong answer") ||
-          cleanedOutput.toLowerCase().includes("time limit exceeded") ||
-          cleanedOutput.toLowerCase().includes("error")))
-    ) {
-      outputColorClass = "!text-red-500 font-bold";
+    if (status === "AC" || (typeof cleanedOutput === "string" && cleanedOutput.toLowerCase().includes("accepted"))) {
+      outputColorClass = "text-emerald-400 font-bold drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]";
+    } else if (isError || (typeof cleanedOutput === "string" && (cleanedOutput.toLowerCase().includes("wrong answer") || cleanedOutput.toLowerCase().includes("time limit exceeded") || cleanedOutput.toLowerCase().includes("error")))) {
+      outputColorClass = "text-rose-400 font-bold drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]";
     }
 
     return (
-      <div
-        className={`p-6 rounded-xl border text-sm leading-relaxed font-mono whitespace-pre-wrap ${isError ? "bg-red-500/5 border-red-500/20 shadow-inner" : "border-zinc-800"} ${outputColorClass}`}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className={`relative p-6 rounded-2xl border text-sm leading-relaxed font-mono whitespace-pre-wrap overflow-hidden ${
+          isError ? "bg-rose-500/5 border-rose-500/30" : "bg-white/[0.02] border-white/10"
+        } ${outputColorClass}`}
       >
+        {isError && <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500 via-red-500 to-rose-500" />}
         {status === "CE" && (
-          <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">
-            Compilation Error
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
+            <div className="text-xs font-black uppercase text-rose-400 tracking-widest">Compilation Error</div>
           </div>
         )}
         {status === "RE" && (
-          <div className="text-xs font-bold uppercase text-red-500/70 mb-3 tracking-widest">
-            Runtime Error
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
+            <div className="text-xs font-black uppercase text-rose-400 tracking-widest">Runtime Error</div>
           </div>
         )}
         {cleanedOutput}
-      </div>
+      </motion.div>
     );
   };
 
@@ -597,8 +712,11 @@ function IDE() {
     <>
       {showEndModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-red-500/50"></div>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 relative overflow-hidden"
+          >
             <h3 className="text-lg font-black text-white mb-2">End Interview?</h3>
             <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
               Are you sure you want to end this interview? This will permanently close the session and disconnect all participants.
@@ -607,14 +725,42 @@ function IDE() {
               <Button variant="ghost" onClick={() => setShowEndModal(false)}>
                 Cancel
               </Button>
-              <Button variant="danger" onClick={() => {
+              <CountdownButton duration={3} onComplete={() => {
                 setShowEndModal(false);
                 handleCloseRoom();
               }}>
                 Yes, End Interview
-              </Button>
+              </CountdownButton>
             </div>
-          </div>
+          </motion.div>
+        </div>
+      )}
+
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 relative overflow-hidden"
+          >
+            <h3 className="text-lg font-black text-white mb-2">Exit Interview?</h3>
+            <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+              Are you sure you want to leave the interview? You can rejoin later if the session is still active.
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <Button variant="ghost" onClick={() => setShowLeaveModal(false)}>
+                Cancel
+              </Button>
+              <CountdownButton duration={3} onComplete={() => {
+                setShowLeaveModal(false);
+                if (!socket.connected) socket.connect();
+                socket.emit("leave-room", activeRoomCode);
+                navigate("/interview-ended?role=candidate-exit");
+              }}>
+                Yes, Exit Interview
+              </CountdownButton>
+            </div>
+          </motion.div>
         </div>
       )}
       
@@ -662,10 +808,10 @@ function IDE() {
           <div className="h-4 w-px bg-zinc-800"></div>
           <div className="flex flex-col justify-center">
             {isInterviewer && room?.problems?.length > 1 ? (
-              <select
-                value={id}
-                onChange={(e) => {
-                  const newId = e.target.value;
+              <ProblemDropdown
+                problems={room.problems}
+                activeProblemId={id}
+                onChange={(newId) => {
                   if (monacoEditorRef.current) {
                     sessionStorage.setItem(`session-${activeRoomCode}-problem-${id}`, monacoEditorRef.current.getValue());
                   }
@@ -673,14 +819,7 @@ function IDE() {
                   socket.emit("interviewer-changed-problem", { roomCode: activeRoomCode, problemId: newId });
                   navigate(`/problem/${newId}?session=${activeRoomCode}`);
                 }}
-                className="text-sm font-black text-white tracking-tight bg-zinc-900 border border-zinc-700 rounded px-2 py-1 outline-none focus:border-blue-500 transition-all cursor-pointer max-w-[200px] truncate"
-              >
-                {room.problems.map(p => (
-                  <option key={p._id} value={p._id}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
+              />
             ) : (
               <h1 className="text-sm font-black text-white tracking-tight flex items-center gap-3 truncate max-w-[200px]">
                 {problem?.title || "Problem"}
@@ -768,11 +907,7 @@ function IDE() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => {
-                if (!socket.connected) socket.connect();
-                socket.emit("leave-room", activeRoomCode);
-                navigate("/interview-ended?role=candidate-exit");
-              }}
+              onClick={() => setShowLeaveModal(true)}
             >
               Exit Interview
             </Button>
@@ -793,19 +928,22 @@ function IDE() {
       <div className="flex-1 flex gap-3 p-3 overflow-hidden relative z-10">
         {/* Left panel: problem description / submission history */}
         <div className="w-5/12 glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden">
-          <div className="bg-black/40 backdrop-blur-md flex gap-2 shrink-0 border-b border-white/[0.05] px-4 pt-2">
-            <button
-              onClick={() => setActiveTab("description")}
-              className={`text-[10px] font-bold uppercase tracking-widest px-6 py-3 transition-all ${activeTab === "description" ? "text-white border-b-2 border-white" : "text-zinc-500 hover:text-zinc-300"}`}
-            >
-              Problem
-            </button>
-            <button
-              onClick={() => setActiveTab("submissions")}
-              className={`text-[10px] font-bold uppercase tracking-widest px-6 py-3 transition-all ${activeTab === "submissions" ? "text-white border-b-2 border-white" : "text-zinc-500 hover:text-zinc-300"}`}
-            >
-              Submissions
-            </button>
+          <div className="flex bg-black/40 backdrop-blur-md border-b border-white/[0.05] shrink-0 relative">
+            {["description", "submissions"].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`relative text-[10px] font-bold uppercase tracking-widest px-6 py-3 transition-all ${activeTab === tab ? "text-white" : "text-zinc-500 hover:text-zinc-300"}`}
+              >
+                {tab === "description" ? "Description" : "Submissions"}
+                {activeTab === tab && (
+                  <motion.div
+                    layoutId="tab-indicator"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"
+                  />
+                )}
+              </button>
+            ))}
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
@@ -909,7 +1047,7 @@ function IDE() {
             </div>
           </div>
 
-          <div className="h-[45%] glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden shrink-0">
+          <div className="h-[55%] glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden shrink-0">
             <div className="bg-black/40 backdrop-blur-md px-6 py-4 border-b border-white/[0.05] shrink-0">
               <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest glow-purple drop-shadow-md">
                 Console Output
@@ -920,7 +1058,7 @@ function IDE() {
             </div>
             <div className="bg-black/40 backdrop-blur-md px-6 py-3 border-t border-white/[0.05] flex justify-end items-center gap-3 shrink-0">
               <Button
-                variant="secondary"
+                variant="primary"
                 size="lg"
                 onClick={() => handleExecution("run")}
                 disabled={isRunning || isSubmitting}
@@ -1017,6 +1155,9 @@ function IDE() {
         </div>
       </div>
     </div>
+      {/* Interviewer Dashboard */}
+      
+      {/* Toast Notifications */}
     </>
   );
 }

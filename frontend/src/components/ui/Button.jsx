@@ -4,21 +4,21 @@ import { motion } from "framer-motion";
 
 const variants = {
   primary:
-    "bg-gradient-to-b from-cyan-500 to-cyan-600 text-white border-t border-x border-cyan-400/30 border-b-[4px] border-b-cyan-800 shadow-[0_5px_15px_rgba(6,182,212,0.3),inset_0_2px_2px_rgba(255,255,255,0.2)] hover:shadow-[0_5px_25px_rgba(6,182,212,0.5),inset_0_2px_2px_rgba(255,255,255,0.2)] hover:brightness-110",
+    "bg-gradient-to-br from-cyan-400 to-blue-600 border-[6px] border-solid border-t-cyan-200 border-l-cyan-400 border-r-blue-700 border-b-blue-900 text-white drop-shadow-[0_0_12px_rgba(6,182,212,0.6)] hover:brightness-110 hover:drop-shadow-[0_0_20px_rgba(6,182,212,0.9)] active:brightness-90 active:scale-95 shadow-[inset_0_2px_15px_rgba(255,255,255,0.4)]",
   secondary:
-    "bg-zinc-800 text-zinc-200 border-t border-x border-zinc-600 border-b-[4px] border-b-zinc-700 shadow-[0_5px_15px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.1)] hover:bg-zinc-700 hover:text-white hover:border-zinc-500 hover:border-b-zinc-600",
+    "bg-gradient-to-br from-zinc-500 to-zinc-700 border-[6px] border-solid border-t-zinc-300 border-l-zinc-400 border-r-zinc-800 border-b-zinc-900 text-zinc-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.15)] hover:brightness-110 hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:text-white active:brightness-90 active:scale-95 shadow-[inset_0_2px_15px_rgba(255,255,255,0.2)]",
   danger:
-    "bg-red-950/60 text-red-400 border-t border-x border-red-800 border-b-[4px] border-b-red-950 shadow-[0_5px_15px_rgba(239,68,68,0.2),inset_0_2px_2px_rgba(255,255,255,0.05)] hover:bg-red-900/60 hover:text-red-300",
+    "bg-gradient-to-br from-rose-400 to-red-600 border-[6px] border-solid border-t-rose-200 border-l-rose-400 border-r-red-700 border-b-red-900 text-white drop-shadow-[0_0_12px_rgba(244,63,94,0.6)] hover:brightness-110 hover:drop-shadow-[0_0_20px_rgba(244,63,94,0.9)] active:brightness-90 active:scale-95 shadow-[inset_0_2px_15px_rgba(255,255,255,0.4)]",
   success:
-    "bg-emerald-600 text-white border-t border-x border-emerald-500 border-b-[4px] border-b-emerald-800 shadow-[0_5px_15px_rgba(16,185,129,0.3),inset_0_2px_2px_rgba(255,255,255,0.2)] hover:bg-emerald-500 hover:border-emerald-400 hover:border-b-emerald-700",
+    "bg-gradient-to-br from-emerald-400 to-green-600 border-[6px] border-solid border-t-emerald-200 border-l-emerald-400 border-r-green-700 border-b-green-900 text-white drop-shadow-[0_0_12px_rgba(52,211,153,0.6)] hover:brightness-110 hover:drop-shadow-[0_0_20px_rgba(52,211,153,0.9)] active:brightness-90 active:scale-95 shadow-[inset_0_2px_15px_rgba(255,255,255,0.4)]",
   ghost:
-    "bg-transparent text-zinc-500 hover:text-white hover:bg-white/[0.05] border border-transparent",
+    "bg-transparent border-[6px] border-solid border-transparent text-zinc-400 hover:text-white hover:bg-white/[0.05] drop-shadow-none hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] active:brightness-90 active:scale-95",
 };
 
 const sizes = {
-  sm: "px-3 py-1.5 text-[10px]",
-  md: "px-5 py-2 text-xs",
-  lg: "px-6 py-2.5 text-xs",
+  sm: "px-2 py-0 text-[10px]",
+  md: "px-3 py-0.5 text-xs",
+  lg: "px-4 py-1.5 text-xs",
 };
 
 const Button = ({
@@ -38,7 +38,7 @@ const Button = ({
       disabled={disabled}
       whileHover={disabled ? {} : { scale: 1.03 }}
       whileTap={disabled ? {} : { scale: 0.95 }}
-      className={`rounded-xl font-black uppercase tracking-widest transition-colors
+      className={`shape-gem font-black uppercase tracking-widest transition-colors
         disabled:opacity-90 disabled:cursor-not-allowed
         ${variants[variant] || variants.primary} 
         ${sizes[size] || sizes.md} 

@@ -6,7 +6,7 @@
 // smooth animations. Integrates Yjs for real-time collaborative editing.
 // ============================================================================
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import Editor from "@monaco-editor/react";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
@@ -25,20 +25,27 @@ const userColors = [
 ];
 
 const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, onMount, isInterviewer }) => {
+  const [isEditorReady, setIsEditorReady] = useState(false);
   const editorRef = useRef(null);
+  const monacoRef = useRef(null);
   const providerRef = useRef(null);
   const bindingRef = useRef(null);
   const docRef = useRef(null);
 
+  // We only run multiplayer setup if we have a roomCode, otherwise this is a solo environment.
+
   // Define custom high-fidelity black theme
   const handleEditorWillMount = (monaco) => {
+    // Define a custom theme that matches the CodeSpace aesthetic
     monaco.editor.defineTheme('codespace-dark', {
       base: 'vs-dark',
       inherit: true,
-      rules: [],
+      rules: [
+        { background: '050505' }
+      ],
       colors: {
         'editor.background': '#050505',
-        'editor.lineHighlightBackground': '#141414',
+        'editor.lineHighlightBackground': '#111111',
         'editorLineNumber.foreground': '#3f3f46',
         'editorLineNumber.activeForeground': '#a1a1aa',
         'editor.selectionBackground': '#2563eb33',
@@ -47,8 +54,10 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
     });
   };
 
-  const handleEditorDidMount = (editor) => {
+  const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
+    setIsEditorReady(true);
     
     // Pass the editor instance up to IDE.jsx so it can grab the latest code directly 
     // rather than relying on React state which causes cursor jumps in multiplayer.
@@ -86,16 +95,9 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
     // Setup awareness (Cursor + Name)
     if (currentUser) {
       // Interviewer gets bright neon green, Candidate gets neon blue
-      let myColor;
-      if (roomCode) {
-        myColor = isInterviewer ? '#39ff14' : '#00e5ff';
-      } else {
-        myColor = userColors[Math.floor(Math.random() * userColors.length)];
-      }
-
       provider.awareness.setLocalStateField('user', {
         name: currentUser.username,
-        color: myColor
+        color: localColor
       });
     }
 
@@ -166,29 +168,81 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
       if (bindingRef.current) bindingRef.current.destroy();
       if (providerRef.current) providerRef.current.disconnect();
       if (docRef.current) docRef.current.destroy();
-      
+      bindingRef.current = null;
+      providerRef.current = null;
+      docRef.current = null;
       const styleEl = document.getElementById('yjs-awareness-styles');
       if (styleEl) styleEl.remove();
     };
   }, []);
 
+  const [randomColor] = useState(() => userColors[Math.floor(Math.random() * userColors.length)]);
+  const localColor = roomCode ? (isInterviewer ? '#39ff14' : '#00e5ff') : randomColor;
+
   // Update awareness when user roles resolve (since isInterviewer starts as false during initial API fetch)
   useEffect(() => {
     if (providerRef.current && currentUser) {
-      let myColor;
-      if (roomCode) {
-        myColor = isInterviewer ? '#39ff14' : '#00e5ff';
-      } else {
-        myColor = userColors[Math.floor(Math.random() * userColors.length)];
-      }
-
       // Preserve existing state, just update color
       providerRef.current.awareness.setLocalStateField('user', {
         name: currentUser.username,
-        color: myColor
+        color: localColor
       });
     }
-  }, [isInterviewer, currentUser, roomCode]);
+  }, [isInterviewer, currentUser, roomCode, localColor]);
+
+  // Local User Cursor Tag Widget
+  useEffect(() => {
+    if (!isEditorReady || !editorRef.current || !monacoRef.current || !currentUser) return;
+    
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+
+    const domNode = document.createElement('div');
+    domNode.innerHTML = 'You';
+    domNode.className = 'local-cursor-widget';
+    domNode.style.position = 'absolute';
+    domNode.style.backgroundColor = localColor;
+    domNode.style.color = '#050505';
+    domNode.style.fontSize = '11px';
+    domNode.style.fontFamily = "'Inter', sans-serif";
+    domNode.style.fontWeight = '800';
+    domNode.style.padding = '1px 6px';
+    domNode.style.borderRadius = '4px';
+    domNode.style.whiteSpace = 'nowrap';
+    domNode.style.pointerEvents = 'none';
+    domNode.style.zIndex = '100';
+    domNode.style.boxShadow = '0 4px 12px rgba(0,0,0,0.5)';
+    // To position it floating right below the cursor
+    domNode.style.transform = 'none';
+    domNode.style.marginTop = '18px';
+    domNode.style.marginLeft = '4px';
+
+    const widget = {
+      getId: () => 'local-user-cursor-widget',
+      getDomNode: () => domNode,
+      getPosition: () => {
+        const position = editor.getPosition();
+        if (!position) return null;
+        return {
+          position: position,
+          preference: [monaco.editor.ContentWidgetPositionPreference.EXACT]
+        };
+      }
+    };
+
+    editor.addContentWidget(widget);
+
+    const updateWidget = () => {
+      editor.layoutContentWidget(widget);
+    };
+
+    const disposable = editor.onDidChangeCursorPosition(updateWidget);
+
+    return () => {
+      editor.removeContentWidget(widget);
+      disposable.dispose();
+    };
+  }, [currentUser, localColor, isEditorReady]);
 
   // Editor settings configured to feel premium and VS Code-like
   const editorOptions = {

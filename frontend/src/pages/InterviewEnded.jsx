@@ -70,27 +70,30 @@ export default function InterviewEnded() {
         </p>
 
         {/* Action Button */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link
-            to="/"
-            className="flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-black rounded-xl font-black uppercase tracking-widest transition-all active:scale-[0.98] w-full sm:w-auto shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] relative overflow-hidden"
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
+          <button
+            onClick={() => navigate("/")}
+            disabled={countdown > 0}
+            className={`flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-black uppercase tracking-widest transition-all duration-500 w-full sm:w-auto relative overflow-hidden shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] active:translate-y-[2px]
+              ${countdown === 0 
+                ? 'bg-gradient-to-r from-emerald-400 to-cyan-500 text-black border border-emerald-400/50 border-b-[3px] border-b-emerald-700' 
+                : 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed border-b-[3px] border-b-black'
+              }
+            `}
           >
+            {/* Background fill transition */}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: countdown === 0 ? '0%' : '-100%' }}
+              transition={{ duration: 5, ease: "linear" }}
+              className="absolute inset-0 bg-gradient-to-r from-emerald-400/20 to-cyan-500/20"
+            />
+
             <span className="relative z-10 flex items-center gap-2">
               <Code2 className="w-5 h-5" />
-              Return to Dashboard
+              {countdown === 0 ? "Return to Dashboard" : `Return to Dashboard (${countdown}s)`}
             </span>
-          </Link>
-        </div>
-
-        {/* Progress Bar Container */}
-        <div className="mt-12 h-1.5 w-full max-w-xs mx-auto bg-white/5 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-gradient-to-r from-emerald-400 to-cyan-500 transition-all ease-linear shadow-[0_0_10px_rgba(52,211,153,0.5)]" 
-            style={{ 
-              width: `${(countdown / 5) * 100}%`,
-              transitionDuration: '1000ms'
-            }} 
-          />
+          </button>
         </div>
       </motion.div>
       
