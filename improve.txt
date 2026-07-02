@@ -23,8 +23,9 @@ To complete the MVP for the resume, the following features must be executed:
 [FEAT-4] Multi-language Support
 → Problem: Currently only C++ is hardcoded.
 → Architecture:
-  1. Pull Docker images: `python:3.12-slim`, `openjdk:21-slim`, `node:20-slim`.
+  1. Pull Docker images: `gcc` (for C/C++), `python:3.12-slim`, `openjdk:21-slim`, `node:20-slim`.
   2. Worker selects image + run command based on a new language dropdown in the editor.
+  3. Support standard languages: C, C++, Python, Java, and JavaScript (Node.js).
 
 [FEAT-5] Problem Bank & Test Case Runner
 → Problem: Interviewers paste questions in chat. Submissions only run against custom input.
