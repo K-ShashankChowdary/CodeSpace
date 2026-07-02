@@ -18,19 +18,7 @@ To complete the MVP for the resume, the following features must be executed:
 
 
 
-[FEAT-2] Session Data Model & Guest Auth Flow
-→ Problem: The current `Room` model is built for 50 students, and forces users to create an account to join.
-→ Architecture: 
-  1. Replace `room.model.js` with `session.model.js` (Interviewer, Candidate, Status, Code Snapshot).
-  2. Implement Guest Join: Interviewer sends a link -> Candidate enters name -> Receives scoped JWT -> Drops instantly into IDE.
-→ Done when: A candidate can join an active interview session in under 3 seconds without a password.
 
-[FEAT-3] UI Overhaul: Dashboard to Interview View
-→ Problem: `RoomDashboard.jsx` shows a grid of student tiles. This is useless for a 1:1 interview.
-→ Architecture:
-  1. Delete `RoomDashboard.jsx`.
-  2. In `Dashboard.jsx`, rename "Host Classroom" to "Start Interview Session".
-  3. In `IDE.jsx`, add an "Interviewer Mode" side-panel (only visible to the host) to take private notes and change the active problem.
 
 [FEAT-4] Multi-language Support
 → Problem: Currently only C++ is hardcoded.
@@ -89,6 +77,8 @@ TECH DEBT (Low Priority)
 =============================================================
 COMPLETED ARCHIVE
 =============================================================
+✅ [FEAT-2] Session Data Model & Guest Auth Flow
+✅ [FEAT-3] UI Overhaul: Dashboard to Interview View
 ✅ [FEAT-1] Collaborative Code Editor (Yjs) implemented successfully with real-time neon name tags and conflict-free cursor syncing.
 ✅ [BUG-1] Socket initialized properly on JWT rehydration.
 ✅ [BUG-2] Ghost user bug fixed; logout now explicitly emits "leave-room".
