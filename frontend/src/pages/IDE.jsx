@@ -116,7 +116,7 @@ function IDE() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Notification State
-  const monacoEditorRef = useRef(null);
+  const [toast, setToast] = useState(null);
   const lastExecutionTypeRef = useRef(null);
   const lastExecutionTimeRef = useRef(null);
 
