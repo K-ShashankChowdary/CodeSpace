@@ -32,6 +32,9 @@ To complete the MVP for the resume, the following features must be executed:
 → Architecture:
   1. `Problem` model in MongoDB with hidden test cases.
   2. "Run" button executes sample cases. "Submit" executes all hidden cases and returns pass/fail metrics.
+  3. External Integrations: Allow interviewers to load LeetCode or Codeforces problems instantly by pasting a URL.
+  4. Custom Problems: Allow interviewers to draft and save their own custom problems on the fly.
+  5. Privacy: The Problem Bank UI and problem selection dropdown must be completely hidden from the Candidate role. Only the Interviewer can see the bank or change the active problem.
 
 [FEAT-6] Built-in Video Call
 → Problem: Requires a separate Zoom link.
