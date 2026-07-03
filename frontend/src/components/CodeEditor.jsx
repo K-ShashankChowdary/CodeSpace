@@ -263,7 +263,7 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
   // Updates parent's code state. We only do this in single-player mode.
   // In multiplayer, IDE.jsx grabs the value directly via editor.getValue()
   const handleEditorChange = (value) => {
-    if (!roomCode && setCode) {
+    if (setCode) {
       setCode(value);
     }
   };
