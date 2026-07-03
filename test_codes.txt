@@ -1,0 +1,339 @@
+# 🧪 CodeSpace Testing Arsenal
+
+A comprehensive suite of test snippets for every supported language. Use these to trigger every possible execution verdict (AC, WA, TLE, RE, CE, MLE) and verify the platform's response.
+
+---
+
+## 🟢 C (GCC)
+
+### ✅ Accepted (AC)
+```c
+#include <stdio.h>
+int main() {
+    int n; if (scanf("%d", &n) != 1) return 0;
+    int coins[100];
+    for (int i = 0; i < n; i++) scanf("%d", &coins[i]);
+    int amount; scanf("%d", &amount);
+    int dp[10001];
+    for (int i = 0; i <= amount; i++) dp[i] = amount + 1;
+    dp[0] = 0;
+    for (int i = 1; i <= amount; i++) {
+        for (int j = 0; j < n; j++) {
+            if (i - coins[j] >= 0 && dp[i - coins[j]] + 1 < dp[i]) {
+                dp[i] = dp[i - coins[j]] + 1;
+            }
+        }
+    }
+    printf("%d\n", dp[amount] > amount ? -1 : dp[amount]);
+    return 0;
+}
+```
+
+### ❌ Wrong Answer (WA)
+```c
+#include <stdio.h>
+int main() {
+    printf("-2\n");
+    return 0;
+}
+```
+
+### ⏳ Time Limit Exceeded (TLE)
+```c
+#include <stdio.h>
+int main() {
+    while(1) {}
+    return 0;
+}
+```
+
+### 💥 Runtime Error (RE)
+```c
+#include <stdio.h>
+int main() {
+    int a = 1, b = 0;
+    printf("%d", a / b); // SIGFPE
+    return 0;
+}
+```
+
+### 🛠️ Compile Error (CE)
+```c
+#include <stdio.h>
+int main() {
+    int x = "Invalid string assignment without semicolon"
+    return 0;
+}
+```
+
+### 🧠 Memory Limit Exceeded (MLE)
+```c
+#include <stdlib.h>
+int main() {
+    while(1) {
+        malloc(10000000);
+    }
+    return 0;
+}
+```
+
+---
+
+## 🔵 C++ (G++)
+
+### ✅ Accepted (AC)
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+int main() {
+    int n; if (!(cin >> n)) return 0;
+    vector<int> coins(n);
+    for (int i = 0; i < n; i++) cin >> coins[i];
+    int amount; cin >> amount;
+    vector<int> dp(amount + 1, amount + 1); dp[0] = 0;
+    for (int i = 1; i <= amount; i++) {
+        for (int coin : coins) {
+            if (i - coin >= 0) dp[i] = min(dp[i], dp[i - coin] + 1);
+        }
+    }
+    cout << (dp[amount] > amount ? -1 : dp[amount]) << endl;
+    return 0;
+}
+```
+
+### ❌ Wrong Answer (WA)
+```cpp
+#include <iostream>
+using namespace std;
+int main() {
+    cout << "-2" << endl;
+    return 0;
+}
+```
+
+### ⏳ Time Limit Exceeded (TLE)
+```cpp
+#include <iostream>
+using namespace std;
+int main() {
+    while(true) {}
+    return 0;
+}
+```
+
+### 💥 Runtime Error (RE)
+```cpp
+#include <iostream>
+using namespace std;
+int main() {
+    int a = 1, b = 0;
+    cout << (a / b) << endl; // SIGFPE
+    return 0;
+}
+```
+
+### 🛠️ Compile Error (CE)
+```cpp
+#include <iostream>
+using namespace std;
+int main() {
+    cout << "Missing semicolon"
+    return 0;
+}
+```
+
+### 🧠 Memory Limit Exceeded (MLE)
+```cpp
+#include <iostream>
+#include <vector>
+using namespace std;
+int main() {
+    vector<int*> memory_leak;
+    while(true) memory_leak.push_back(new int[10000000]);
+    return 0;
+}
+```
+
+---
+
+## ☕ Java (OpenJDK)
+
+### ✅ Accepted (AC)
+```java
+import java.util.Scanner;
+import java.util.Arrays;
+public class Main {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        if (!scanner.hasNextInt()) return;
+        int n = scanner.nextInt();
+        int[] coins = new int[n];
+        for (int i = 0; i < n; i++) coins[i] = scanner.nextInt();
+        int amount = scanner.nextInt();
+        int[] dp = new int[amount + 1];
+        Arrays.fill(dp, amount + 1); dp[0] = 0;
+        for (int i = 1; i <= amount; i++) {
+            for (int coin : coins) {
+                if (i - coin >= 0) dp[i] = Math.min(dp[i], dp[i - coin] + 1);
+            }
+        }
+        System.out.println(dp[amount] > amount ? -1 : dp[amount]);
+    }
+}
+```
+
+### ❌ Wrong Answer (WA)
+```java
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("-2");
+    }
+}
+```
+
+### ⏳ Time Limit Exceeded (TLE)
+```java
+public class Main {
+    public static void main(String[] args) {
+        while (true) {}
+    }
+}
+```
+
+### 💥 Runtime Error (RE)
+```java
+public class Main {
+    public static void main(String[] args) {
+        int a = 1, b = 0;
+        System.out.println(a / b); // ArithmeticException
+    }
+}
+```
+
+### 🛠️ Compile Error (CE)
+```java
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("Missing semicolon")
+    }
+}
+```
+
+### 🧠 Memory Limit Exceeded (MLE)
+```java
+import java.util.ArrayList;
+public class Main {
+    public static void main(String[] args) {
+        ArrayList<int[]> list = new ArrayList<>();
+        while(true) list.add(new int[10000000]); // OutOfMemoryError
+    }
+}
+```
+
+---
+
+## 🐍 Python (CPython)
+
+### ✅ Accepted (AC)
+```python
+import sys
+def solve():
+    input_data = sys.stdin.read().split()
+    if not input_data: return
+    n = int(input_data[0])
+    coins = [int(x) for x in input_data[1:n+1]]
+    amount = int(input_data[n+1])
+    dp = [float('inf')] * (amount + 1); dp[0] = 0
+    for i in range(1, amount + 1):
+        for coin in coins:
+            if i - coin >= 0: dp[i] = min(dp[i], dp[i - coin] + 1)
+    print(dp[amount] if dp[amount] != float('inf') else -1)
+if __name__ == "__main__": solve()
+```
+
+### ❌ Wrong Answer (WA)
+```python
+print("-2")
+```
+
+### ⏳ Time Limit Exceeded (TLE)
+```python
+while True:
+    pass
+```
+
+### 💥 Runtime Error (RE)
+```python
+a = 1 / 0 # ZeroDivisionError
+```
+
+### 🛠️ Compile Error (CE)
+```python
+# SyntaxError in Python
+def if:
+    print("Invalid syntax")
+```
+
+### 🧠 Memory Limit Exceeded (MLE)
+```python
+leak = []
+while True:
+    leak.append(' ' * 10000000) # MemoryError
+```
+
+---
+
+## 🟨 JavaScript (Node.js)
+
+### ✅ Accepted (AC)
+```javascript
+const fs = require('fs');
+function solve() {
+    const input = fs.readFileSync('/dev/stdin', 'utf8').trim().split(/\s+/);
+    if (!input || input.length === 0 || input[0] === "") return;
+    let index = 0; const n = parseInt(input[index++]);
+    const coins = [];
+    for (let i = 0; i < n; i++) coins.push(parseInt(input[index++]));
+    const amount = parseInt(input[index++]);
+    const dp = new Array(amount + 1).fill(amount + 1); dp[0] = 0;
+    for (let i = 1; i <= amount; i++) {
+        for (const coin of coins) {
+            if (i - coin >= 0) dp[i] = Math.min(dp[i], dp[i - coin] + 1);
+        }
+    }
+    console.log(dp[amount] > amount ? -1 : dp[amount]);
+}
+solve();
+```
+
+### ❌ Wrong Answer (WA)
+```javascript
+console.log("-2");
+```
+
+### ⏳ Time Limit Exceeded (TLE)
+```javascript
+while (true) {}
+```
+
+### 💥 Runtime Error (RE)
+```javascript
+// In JS, 1/0 is Infinity. We throw explicitly to crash the script.
+throw new Error("Intentional Runtime Error");
+```
+
+### 🛠️ Compile Error (CE)
+```javascript
+// SyntaxError prevents execution
+const x = ;
+```
+
+### 🧠 Memory Limit Exceeded (MLE)
+```javascript
+const leak = [];
+while (true) {
+    leak.push(new Array(10000000).fill(1)); // V8 Out of Memory
+}
+```
