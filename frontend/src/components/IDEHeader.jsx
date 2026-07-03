@@ -41,8 +41,16 @@ const IDEHeader = ({
           dot: "bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.8)]"
         };
       case "MLE":
-      case "IE":
+        return {
+          box: "bg-purple-500/10 border-purple-500/20 !text-purple-500",
+          dot: "bg-purple-500 shadow-[0_0_5px_rgba(168,85,247,0.8)]"
+        };
       case "RE":
+        return {
+          box: "bg-pink-500/10 border-pink-500/20 !text-pink-500",
+          dot: "bg-pink-500 shadow-[0_0_5px_rgba(236,72,153,0.8)]"
+        };
+      case "IE":
       case "WA":
         return {
           box: "bg-red-500/10 border-red-500/20 !text-red-500",

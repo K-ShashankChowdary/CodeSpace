@@ -47,7 +47,13 @@ function IDE() {
   // we store a reference to the Monaco editor directly.
   const monacoEditorRef = useRef(null);
 
-  const [language, setLanguage] = useState("cpp");
+  const [language, setLanguage] = useState(() => {
+    return localStorage.getItem(`codespace-lastLang`) || "cpp";
+  });
+
+  useEffect(() => {
+    localStorage.setItem(`codespace-lastLang`, language);
+  }, [language]);
 
   const boilerplates = {
     cpp: `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // Write your code here\n    \n    return 0;\n}`,
@@ -58,7 +64,7 @@ function IDE() {
   };
 
   const [code, setCode] = useState(() => {
-    return localStorage.getItem(`codespace-${id}-cpp`) || boilerplates["cpp"];
+    return localStorage.getItem(`codespace-${id}-${language}`) || boilerplates[language] || boilerplates["cpp"];
   });
 
   const setCursorToBoilerplate = (editor) => {
@@ -181,7 +187,8 @@ function IDE() {
         if (savedCode) {
           setCode(savedCode);
         } else if (problemData?.boilerplate) {
-          setCode(problemData.boilerplate["C++ 17"] || boilerplates["cpp"]);
+          const dbKeyMap = { cpp: "C++ 17", c: "C", python: "Python 3", java: "Java", javascript: "JavaScript" };
+          setCode(problemData.boilerplate[dbKeyMap[language]] || boilerplates[language] || boilerplates["cpp"]);
         }
 
         if (activeRoomCode) {

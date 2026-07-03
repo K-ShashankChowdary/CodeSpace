@@ -13,7 +13,6 @@ using namespace std;
 using namespace std::chrono;
 
 // --- Configuration & Security Limits ---
-const string IMAGE = "cpp-runner"; // Docker image containing g++
 const int MAX_OUTPUT_SIZE = 10000; // Max bytes to read from stdout/stderr (10KB limit to prevent buffer overflow)
 const string MEM_LIMIT = "256m";   // Strict 256MB RAM cap
 const string CPU_LIMIT = "0.5";    // Throttle to 50% of a CPU core
@@ -61,20 +60,29 @@ int main(int argc, char *argv[])
     signal(SIGINT, cleanup);
     signal(SIGTERM, cleanup);
 
-    if (argc < 3)
+    if (argc < 4)
     {
-        cout << "{\"status\":\"IE\",\"output\":\"INTERNAL: Missing Job ID or Temp Path\"}" << endl;
+        cout << "{\"status\":\"IE\",\"output\":\"INTERNAL: Missing Job ID, Temp Path, or Language\"}" << endl;
         return 1;
     }
 
     try
     {
         string jobId = argv[1];   // MongoDB submission _id
-        string pathArg = argv[2]; // absolute path to temp dir with .cpp and .txt files
+        string pathArg = argv[2]; // absolute path to temp dir with files
+        string language = argv[3]; // The programming language string
 
         fs::path tempDir(pathArg);
-        fs::path codePath = tempDir / (jobId + ".cpp");
-        fs::path inputPath = tempDir / (jobId + ".txt");
+        
+        string ext = ".cpp";
+        if (language == "c") ext = ".c";
+        else if (language == "python") ext = ".py";
+        else if (language == "java") ext = ".java";
+        else if (language == "javascript") ext = ".js";
+
+        string srcFileName = (language == "java") ? "Main.java" : (jobId + ext);
+        fs::path codePath = tempDir / srcFileName;
+        fs::path inputPath = tempDir / "input.txt";
 
 // macOS uses 'gtimeout', Linux uses standard 'timeout'
 #ifdef __APPLE__
@@ -86,32 +94,56 @@ int main(int argc, char *argv[])
         string exeName = "r_" + jobId;
         string timeFileName = "time_" + jobId + ".txt";
 
+        string image = "gcc"; 
+        string compileCmd = "";
+        string runBinaryCmd = "";
+
+        if (language == "cpp") {
+            image = "gcc";
+            compileCmd = "g++ -w -std=c++17 -O2 " + srcFileName + " -o " + exeName;
+            runBinaryCmd = "./" + exeName;
+        } else if (language == "c") {
+            image = "gcc";
+            compileCmd = "gcc -w -O2 " + srcFileName + " -o " + exeName;
+            runBinaryCmd = "./" + exeName;
+        } else if (language == "python") {
+            image = "python:3.12-slim";
+            compileCmd = "";
+            runBinaryCmd = "python3 " + srcFileName;
+        } else if (language == "javascript") {
+            image = "node:20-slim";
+            compileCmd = "";
+            runBinaryCmd = "node " + srcFileName;
+        } else if (language == "java") {
+            image = "eclipse-temurin:21";
+            compileCmd = "javac " + srcFileName;
+            runBinaryCmd = "java -XX:+TieredCompilation -XX:TieredStopAtLevel=1 Main";
+        }
+
         // --- The Execution Command ---
-        // 1. Record start time in nanoseconds.
-        // 2. Run the compiled binary (piping input if it exists).
-        // 3. Capture the exit code.
-        // 4. Record end time and calculate execution duration in milliseconds.
-        // 5. Save the duration to a text file for accurate internal timing.
-        string dockerRunCmd = "( start=$(date +%s%N); ./" + exeName;
+        string dockerRunCmd = "( start=$(date +%s%N); " + runBinaryCmd;
         if (fs::exists(inputPath))
         {
-            dockerRunCmd += " < " + jobId + ".txt";
+            dockerRunCmd += " < input.txt";
         }
         // compute in milliseconds using nanoseconds scaled down
         dockerRunCmd += "; exit_code=$?; end=$(date +%s%N); echo $(((end - start) / 1000000)) > " + timeFileName + "; exit $exit_code; )";
 
-        // build the docker run command with all security flags:
-        // --rm (auto-cleanup), --network none (no internet), --memory (RAM cap),
-        // --memory-swap (disable swap), --pids-limit (fork bomb protection),
-        // 2>&1 (capture both stdout and stderr)
+        string innerCmd = "";
+        if (compileCmd != "") {
+            innerCmd = compileCmd + " && " + dockerRunCmd;
+        } else {
+            innerCmd = dockerRunCmd;
+        }
+
+        // build the docker run command with all security flags
         string cmd = timeoutCmd + " -k 1s " + TIME_LIMIT + " docker run --rm --init " +
                      "--cpus=\"" + CPU_LIMIT + "\" " +
                      "--stop-timeout 1 " +
                      "-v \"" + tempDir.string() + ":/app\" " +
                      "--network none --memory=\"" + MEM_LIMIT + "\" " +
                      "--memory-swap=\"" + MEM_LIMIT + "\" --pids-limit=" + PID_LIMIT +
-                     " -w /app " + IMAGE + " /bin/sh -c '" +
-                     "g++ -w -std=c++17 -O2 " + jobId + ".cpp -o " + exeName + " && " + dockerRunCmd + "' 2>&1";
+                     " -w /app " + image + " /bin/sh -c '" + innerCmd + "' 2>&1";
 
         auto start = high_resolution_clock::now();
         current_pipe = popen(cmd.c_str(), "r");
@@ -184,15 +216,22 @@ int main(int argc, char *argv[])
             // The program (or compiler) exited with an error
 
             // 1. Check for Compilation Error
-            if (raw_out.find("error:") != string::npos || raw_out.find("fatal error:") != string::npos)
+            if (raw_out.find("error:") != string::npos || 
+                raw_out.find("fatal error:") != string::npos || 
+                raw_out.find("SyntaxError") != string::npos || 
+                raw_out.find("IndentationError") != string::npos || 
+                raw_out.find("TabError") != string::npos)
             {
                 status = "CE";
                 exec_duration = 0; // FIX: Prevent massive junk numbers because the binary never ran
             }
-            // 2. Check for C++ specific Memory Limit Exceeded (e.g., massive vector allocations)
-            else if (raw_out.find("std::bad_alloc") != string::npos)
+            // 2. Check for Memory Limit Exceeded across languages (e.g., massive allocations before Docker OOM)
+            else if (raw_out.find("std::bad_alloc") != string::npos ||
+                     raw_out.find("java.lang.OutOfMemoryError") != string::npos ||
+                     raw_out.find("MemoryError") != string::npos ||
+                     raw_out.find("heap out of memory") != string::npos)
             {
-                status = "MLE"; // FIX: Catch heap exhaustion before Docker OOM killer intervenes
+                status = "MLE"; // FIX: Catch heap exhaustion across C++, Java, JS, Python
             }
             // 3. Catch-all for Runtime Errors (Segfaults, Out of Bounds, etc.)
             else

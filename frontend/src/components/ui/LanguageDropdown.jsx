@@ -7,7 +7,7 @@ const languages = [
   { id: 'c', name: 'C' },
   { id: 'python', name: 'Python 3' },
   { id: 'java', name: 'Java' },
-  { id: 'javascript', name: 'Node.js' }
+  { id: 'javascript', name: 'JavaScript' }
 ];
 
 const LanguageDropdown = ({ language, onChange }) => {

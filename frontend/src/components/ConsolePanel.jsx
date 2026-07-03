@@ -62,7 +62,18 @@ const ConsolePanel = ({
             dot: "bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]",
             box: "bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 shadow-[inset_0_0_20px_rgba(234,179,8,0.05)]",
           };
+        case "MLE":
+          return {
+            text: "text-purple-500 drop-shadow-[0_0_12px_rgba(168,85,247,0.4)]",
+            dot: "bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)]",
+            box: "bg-purple-500/10 text-purple-300 border border-purple-500/20 shadow-[inset_0_0_20px_rgba(168,85,247,0.05)]",
+          };
         case "RE":
+          return {
+            text: "text-pink-500 drop-shadow-[0_0_12px_rgba(236,72,153,0.4)]",
+            dot: "bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.6)]",
+            box: "bg-pink-500/10 text-pink-300 border border-pink-500/20 shadow-[inset_0_0_20px_rgba(236,72,153,0.05)]",
+          };
         case "WA":
         default:
           return {

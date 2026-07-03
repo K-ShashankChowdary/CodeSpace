@@ -312,7 +312,7 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
         theme="codespace-dark"
         beforeMount={handleEditorWillMount}
         onMount={handleEditorDidMount}
-        defaultLanguage={language}
+        language={language}
         defaultValue={roomCode ? "" : code}
         onChange={handleEditorChange}
         options={editorOptions}
