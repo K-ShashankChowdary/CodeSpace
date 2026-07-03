@@ -5,7 +5,11 @@ dotenv.config({path:"./.env"});
 // singleton Redis client - used as a job queue for code submissions
 // backend pushes jobs with LPUSH, C++ worker pops them with BRPOP
 const redisClient = createClient({
-    url: process.env.REDIS_URI || "redis://localhost:6379"
+    url: process.env.REDIS_URI || "redis://localhost:6379",
+    pingInterval: 10000,
+    socket: {
+        keepAlive: 10000
+    }
 });
 
 redisClient.on("error", (err) => console.log("Redis Client Error", err));

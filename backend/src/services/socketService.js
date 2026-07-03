@@ -12,14 +12,24 @@ export const initializeSockets = (httpServer) => {
     cors: { origin: process.env.CORS_ORIGIN, credentials: true },
   });
 
+  const redisUrl = process.env.REDIS_URI || "redis://localhost:6379";
+  const isUpstash = redisUrl.includes("upstash.io");
+
   const subscriber = createClient({
-    url: process.env.REDIS_URI || "redis://localhost:6379"
+    url: process.env.REDIS_URI || "redis://localhost:6379",
+    pingInterval: 10000,
+    socket: {
+        keepAlive: 10000
+    }
   });
+
+  subscriber.on("error", (err) => console.log("Redis Subscriber Error", err));
   
   subscriber.connect().then(() => {
     subscriber.subscribe("job-updates", (message) => {
       try {
         const data = JSON.parse(message);
+        console.log(`[Socket] Broadcasting job-verdict to job_${data.jobId} for language: ${data.language || 'unknown'}`);
         io.to(`job_${data.jobId}`).emit("job-verdict", data);
       } catch (err) {
         console.error("Redis Pub/Sub Parse Error:", err);

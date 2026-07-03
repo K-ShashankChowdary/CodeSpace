@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon src/index.js",
+    "dev": "nodemon --watch src src/index.js",
     "worker": "node workers/jobworker.js"
   },
   "keywords": [],
@@ -23,6 +23,7 @@
     "mongoose": "^9.2.1",
     "redis": "^5.11.0",
     "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "uuid": "^13.0.0",
     "ws": "^8.21.0",
     "y-websocket": "^1.5.0",

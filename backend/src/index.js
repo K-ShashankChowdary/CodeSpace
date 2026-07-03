@@ -39,7 +39,7 @@ const startServer = async () => {
         });
 
         const port = process.env.PORT || 8000;
-        httpServer.listen(port, () => {
+        httpServer.listen(port, "0.0.0.0", () => {
             console.log(`\n⚙️ Server & WebSockets running at port: ${port}`);
         });
     } catch (err) {

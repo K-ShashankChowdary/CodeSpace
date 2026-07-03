@@ -12,48 +12,61 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
+const redisUrl = process.env.REDIS_URI || "redis://localhost:6379";
+const isUpstash = redisUrl.includes("upstash.io");
+
 const redisClient = createClient({
-    url: process.env.REDIS_URI || "redis://localhost:6379"
+    url: redisUrl,
+    pingInterval: 10000,
+    socket: {
+        keepAlive: 10000
+    }
+});
+
+const redisPublisher = createClient({
+    url: redisUrl,
+    pingInterval: 10000,
+    socket: {
+        keepAlive: 10000
+    }
 });
 
 redisClient.on("error", (err) => console.log("Redis Client Error", err));
 
-const runCpp = async (jobId, code, input, testIndex) => {
+const runCode = async (jobId, code, input, testIndex, language) => {
     if (!/^[a-f0-9]+$/i.test(jobId)) {
         return { status: "IE", output: "Invalid job ID format" };
     }
 
     const uniqueId = `${jobId}_tc${testIndex}`;
-    const fileName = `${uniqueId}.cpp`;
-    const inputName = `${uniqueId}.txt`;
-    const tempDir = path.resolve(__dirname, "temp");
+    const baseTempDir = process.env.TEMP_DIR || path.resolve(__dirname, "temp");
+    const jobTempDir = path.join(baseTempDir, uniqueId);
 
     try {
-        await fs.promises.access(tempDir);
-    } catch {
-        await fs.promises.mkdir(tempDir, { recursive: true });
-    }
+        await fs.promises.mkdir(jobTempDir, { recursive: true });
+    } catch {}
 
-    const filePath = path.join(tempDir, fileName);
-    const inputPath = path.join(tempDir, inputName);
+    let ext = ".cpp";
+    if (language === "c") ext = ".c";
+    else if (language === "python") ext = ".py";
+    else if (language === "java") ext = ".java";
+    else if (language === "javascript") ext = ".js";
+
+    let fileName = language === "java" ? "Main.java" : `${uniqueId}${ext}`;
+    
+    const filePath = path.join(jobTempDir, fileName);
+    const inputPath = path.join(jobTempDir, "input.txt"); // unified input naming
 
     await fs.promises.writeFile(filePath, code);
     await fs.promises.writeFile(inputPath, input);
 
     const enginePath = path.resolve(__dirname, "../../engine/executor");
-    const command = `${enginePath} ${uniqueId} "${tempDir}"`;
+    const command = `${enginePath} ${uniqueId} "${jobTempDir}" ${language}`;
 
     return new Promise((resolve) => {
         exec(command, { timeout: 30000 }, async (error, stdout, stderr) => {
             try {
-                const safeUnlink = async (p) => {
-                    try { await fs.promises.unlink(p); } catch (e) {}
-                };
-                await Promise.all([
-                    safeUnlink(filePath),
-                    safeUnlink(inputPath),
-                    safeUnlink(path.join(tempDir, `r_${uniqueId}`))
-                ]);
+                await fs.promises.rm(jobTempDir, { recursive: true, force: true });
             } catch (cleanupErr) {
                 console.error(`[Job ${jobId}] Cleanup failed:`, cleanupErr);
             }
@@ -72,7 +85,7 @@ const runCpp = async (jobId, code, input, testIndex) => {
 
 const processSubmission = async (submissionStr) => {
     const submission = JSON.parse(submissionStr);
-    const { jobId, code, language, testCases } = submission;
+    const { jobId, code, language, testCases, timeLimit = 2000 } = submission;
     
     console.log(`\n========================================`);
     console.log(`[Job ${jobId}] Processing started.`);
@@ -87,8 +100,8 @@ const processSubmission = async (submissionStr) => {
             const tc = testCases[i];
             let result;
 
-            if (language === "cpp") {
-                result = await runCpp(jobId, code, tc.input, i);
+            if (["cpp", "c", "python", "java", "javascript"].includes(language)) {
+                result = await runCode(jobId, code, tc.input, i, language);
             } else {
                 result = { status: "IE", output: "Unsupported Language" };
             }
@@ -98,6 +111,9 @@ const processSubmission = async (submissionStr) => {
             
             let currentStatus = result.status;
 
+            if (currentStatus === "AC" && (result.time_ms || 0) > timeLimit) {
+                currentStatus = "TLE";
+            }
             if (currentStatus === "AC" && actual !== expected) {
                 currentStatus = "WA";
             }
@@ -128,7 +144,7 @@ const processSubmission = async (submissionStr) => {
         };
 
         await Submission.findByIdAndUpdate(jobId, jobData);
-        await redisClient.publish("job-updates", JSON.stringify({ jobId, ...jobData }));
+        await redisPublisher.publish("job-updates", JSON.stringify({ jobId, ...jobData }));
 
         console.log(`[Job ${jobId}] Completed with Final Verdict: ${finalVerdict}`);
         console.log(`========================================\n`);
@@ -142,13 +158,14 @@ const processSubmission = async (submissionStr) => {
         };
 
         await Submission.findByIdAndUpdate(jobId, errorData);
-        await redisClient.publish("job-updates", JSON.stringify({ jobId, ...errorData }));
+        await redisPublisher.publish("job-updates", JSON.stringify({ jobId, ...errorData }));
     }
 };
 
 const startWorker = async () => {
     try {
         await redisClient.connect();
+        await redisPublisher.connect();
         console.log("⚡ Worker connected to Redis.");
         
         if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI missing");
@@ -157,8 +174,10 @@ const startWorker = async () => {
 
         while (true) {
             try {
-                const submission = await redisClient.brPop("submissions", 0);
-                await processSubmission(submission.element);
+                const submission = await redisClient.brPop("submissions", 5);
+                if (submission) {
+                    await processSubmission(submission.element);
+                }
             } catch (err) {
                 console.error("Worker Loop Error:", err);
             }
