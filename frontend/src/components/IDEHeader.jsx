@@ -18,6 +18,46 @@ const IDEHeader = ({
   onLogout,
   onCopyLink,
 }) => {
+  const getStatusTheme = (s) => {
+    switch (s) {
+      case "AC":
+        return {
+          box: "bg-green-500/10 border-green-500/20 !text-green-500",
+          dot: "bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.8)]"
+        };
+      case "Idle":
+        return {
+          box: "bg-zinc-800 border-zinc-700 text-zinc-300",
+          dot: "bg-zinc-500"
+        };
+      case "TLE":
+        return {
+          box: "bg-orange-500/10 border-orange-500/20 !text-orange-500",
+          dot: "bg-orange-500 shadow-[0_0_5px_rgba(249,115,22,0.8)]"
+        };
+      case "CE":
+        return {
+          box: "bg-yellow-500/10 border-yellow-500/20 !text-yellow-500",
+          dot: "bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.8)]"
+        };
+      case "MLE":
+      case "IE":
+      case "RE":
+      case "WA":
+        return {
+          box: "bg-red-500/10 border-red-500/20 !text-red-500",
+          dot: "bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]"
+        };
+      default: // Executing, Pending, Queued, etc.
+        return {
+          box: "bg-blue-500/10 border-blue-500/20 !text-blue-500",
+          dot: "bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.8)] animate-pulse"
+        };
+    }
+  };
+
+  const theme = getStatusTheme(status);
+
   return (
     <header className="h-16 flex justify-between items-center glass-panel border-b border-white/[0.05] px-8 shrink-0 z-30">
       <div className="flex items-center gap-6">
@@ -72,28 +112,8 @@ const IDEHeader = ({
           <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
             Status
           </span>
-          <div
-            className={`flex items-center gap-2 px-2.5 py-1 rounded border ${
-              status === "AC"
-                ? "bg-green-500/10 border-green-500/20 !text-green-500"
-                : status === "Idle"
-                  ? "bg-zinc-800 border-zinc-700 text-zinc-300"
-                  : ["CE", "RE", "TLE", "WA"].includes(status)
-                    ? "bg-red-500/10 border-red-500/20 !text-red-500"
-                    : "bg-blue-500/10 border-blue-500/20 !text-blue-500"
-            }`}
-          >
-            <div
-              className={`w-1.5 h-1.5 rounded-full ${
-                status === "AC"
-                  ? "bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.8)]"
-                  : status === "Idle"
-                    ? "bg-zinc-500"
-                    : ["CE", "RE", "TLE", "WA"].includes(status)
-                      ? "bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]"
-                      : "bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.8)] animate-pulse"
-              }`}
-            ></div>
+          <div className={`flex items-center gap-2 px-2.5 py-1 rounded border ${theme.box}`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}></div>
             <span className="text-[10px] font-bold uppercase tracking-widest">
               {getFullStatus(status)}
             </span>

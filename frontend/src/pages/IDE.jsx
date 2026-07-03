@@ -9,7 +9,7 @@ import MultiplayerCursors from "../components/MultiplayerCursors";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import StatusBadge, { getFullStatus } from "../components/ui/StatusBadge";
-import { LogOut, Play, Send, Loader2, Rocket } from "lucide-react";
+import { LogOut, Play, Send, Loader2, Rocket, RotateCcw } from "lucide-react";
 import Toast from "../components/ui/Toast";
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
@@ -52,7 +52,7 @@ function IDE() {
   const boilerplates = {
     cpp: `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // Write your code here\n    \n    return 0;\n}`,
     c: `#include <stdio.h>\n\nint main() {\n    // Write your code here\n    \n    return 0;\n}`,
-    python: `def solve():\n    # Write your code here\n    pass\n\nif __name__ == '__main__':\n    solve()`,
+    python: `def solve():\n    # Write your code here\n    \n    pass\n\nif __name__ == '__main__':\n    solve()`,
     java: `import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        // Write your code here\n        \n    }\n}`,
     javascript: `function solve() {\n    // Write your code here\n    \n}\n\nsolve();`
   };
@@ -65,17 +65,61 @@ function IDE() {
     if (!editor) return;
     const model = editor.getModel();
     if (!model) return;
-    const matches = model.findMatches("Write your code here", false, false, false, null, false);
+    
+    // Attempt 1: Find the comment
+    let matches = model.findMatches("Write your code here", false, false, false, null, false);
     if (matches && matches.length > 0) {
-      // Small timeout to allow Monaco to finish rendering / Yjs to sync
       setTimeout(() => {
-        editor.setPosition({
-          lineNumber: matches[0].range.endLineNumber,
-          column: matches[0].range.endColumn
-        });
+        editor.setPosition({ lineNumber: matches[0].range.endLineNumber + 1, column: 5 });
         editor.focus();
       }, 50);
+      return;
     }
+
+    // Attempt 2: Find "return 0;" for C/C++
+    matches = model.findMatches("return 0;", false, false, false, null, false);
+    if (matches && matches.length > 0) {
+      setTimeout(() => {
+        editor.setPosition({ lineNumber: Math.max(1, matches[0].range.startLineNumber - 1), column: 5 });
+        editor.focus();
+      }, 50);
+      return;
+    }
+
+    // Attempt 3: Find "pass" for Python
+    matches = model.findMatches("pass", false, false, false, null, false);
+    if (matches && matches.length > 0) {
+      setTimeout(() => {
+        editor.setPosition({ lineNumber: matches[0].range.startLineNumber, column: 5 });
+        editor.setSelection(matches[0].range);
+        editor.focus();
+      }, 50);
+      return;
+    }
+
+    // Fallback: Middle of the document
+    setTimeout(() => {
+      editor.setPosition({ lineNumber: Math.floor(model.getLineCount() / 2) + 1, column: 5 });
+      editor.focus();
+    }, 50);
+  };
+
+  const [showResetModal, setShowResetModal] = useState(false);
+
+  const performCodeReset = () => {
+    const dbKeyMap = { cpp: "C++ 17", c: "C", python: "Python 3", java: "Java", javascript: "JavaScript" };
+    const codeToSet = problem?.boilerplate?.[dbKeyMap[language]] || boilerplates[language];
+    if (monacoEditorRef.current) {
+      monacoEditorRef.current.setValue(codeToSet);
+      setCursorToBoilerplate(monacoEditorRef.current);
+    } else {
+      setCode(codeToSet);
+    }
+    showToast("Code reset to boilerplate", "success");
+  };
+
+  const handleResetCode = () => {
+    setShowResetModal(true);
   };
 
   useEffect(() => {
@@ -484,6 +528,32 @@ function IDE() {
   // ==========================================
   return (
     <>
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 relative overflow-hidden"
+          >
+            <h3 className="text-lg font-black text-white mb-2">Reset Code?</h3>
+            <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+              Are you sure you want to reset your code to the default boilerplate? This action cannot be undone.
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <Button variant="ghost" onClick={() => setShowResetModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => {
+                setShowResetModal(false);
+                performCodeReset();
+              }} className="bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20">
+                Yes, Reset Code
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {showEndModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <motion.div 
@@ -592,21 +662,32 @@ function IDE() {
               <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest glow-cyan drop-shadow-md">
                 {language === "cpp" ? "main.cpp" : language === "c" ? "main.c" : language === "python" ? "main.py" : language === "java" ? "Main.java" : "index.js"}
               </span>
-              <LanguageDropdown 
-                language={language}
-                onChange={(lang) => {
-                  setLanguage(lang);
-                  const savedLangCode = localStorage.getItem(`codespace-${id}-${lang}`);
-                  const codeToSet = savedLangCode || boilerplates[lang];
-                  
-                  if (monacoEditorRef.current) {
-                    monacoEditorRef.current.setValue(codeToSet);
-                    setCursorToBoilerplate(monacoEditorRef.current);
-                  } else {
-                    setCode(codeToSet);
-                  }
-                }}
-              />
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={handleResetCode}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400 hover:text-white transition-colors duration-200"
+                  title="Reset code to boilerplate"
+                >
+                  <RotateCcw size={14} />
+                  <span>Reset</span>
+                </button>
+                <LanguageDropdown 
+                  language={language}
+                  onChange={(lang) => {
+                    setLanguage(lang);
+                    const savedLangCode = localStorage.getItem(`codespace-${id}-${lang}`);
+                    const dbKeyMap = { cpp: "C++ 17", c: "C", python: "Python 3", java: "Java", javascript: "JavaScript" };
+                    const codeToSet = savedLangCode || problem?.boilerplate?.[dbKeyMap[lang]] || boilerplates[lang];
+                    
+                    if (monacoEditorRef.current) {
+                      monacoEditorRef.current.setValue(codeToSet);
+                      setCursorToBoilerplate(monacoEditorRef.current);
+                    } else {
+                      setCode(codeToSet);
+                    }
+                  }}
+                />
+              </div>
             </div>
             <div className="flex-1 relative bg-black/20 overflow-hidden">
               <CodeEditor 
