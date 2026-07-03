@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.api
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+    networks:
+      - codespace-net
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.worker
+    env_file:
+      - ./backend/.env
+    environment:
+      # Use a shared host path so the worker container and the host Docker daemon share the same absolute path
+      - TEMP_DIR=/tmp/codespace
+    volumes:
+      # Give worker access to spawn containers on the host
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Map the temp execution directory perfectly between host and container
+      - /tmp/codespace:/tmp/codespace
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks:
+      - codespace-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - codespace-net
+
+networks:
+  codespace-net:
+    driver: bridge

@@ -1,0 +1,37 @@
+FROM ubuntu:22.04
+
+# Avoid tzdata interactive prompts during installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies: curl, g++, and docker.io for Docker-in-Docker functionality
+RUN apt-get update && apt-get install -y \
+    curl \
+    g++ \
+    docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the entire backend directory (this contains workers/jobworker.js)
+# We also need the engine folder compiled!
+# Wait, the engine folder is technically outside backend. We'll copy the engine folder too.
+COPY backend/package*.json ./backend/
+WORKDIR /app/backend
+RUN npm install
+
+WORKDIR /app
+COPY backend ./backend
+COPY engine ./engine
+
+# Compile the executor binary inside the worker image so it's perfectly native
+WORKDIR /app/engine
+RUN g++ -std=c++17 -O3 executor.cpp -o executor
+
+# Back to backend to run the worker
+WORKDIR /app/backend
+CMD ["npm", "run", "worker"]
