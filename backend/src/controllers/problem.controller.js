@@ -34,4 +34,29 @@ const getProblemById = asyncHandler(async (req, res) => {
     );
 });
 
-export { getAllProblems, getProblemById };
+const createCustomProblem = asyncHandler(async (req, res) => {
+    const { title, description, difficulty, timeLimit, memoryLimit, testCases } = req.body;
+
+    if ([title, description, difficulty].some(field => !field || field.trim() === "")) {
+        throw new ApiError(400, "Title, description, and difficulty are required");
+    }
+
+    if (!testCases || !Array.isArray(testCases) || testCases.length === 0) {
+        throw new ApiError(400, "At least one test case is required");
+    }
+
+    const problem = await Problem.create({
+        title,
+        description,
+        difficulty,
+        timeLimit: timeLimit || 2000,
+        memoryLimit: memoryLimit || 256,
+        testCases
+    });
+
+    return res.status(201).json(
+        new ApiResponse(201, problem, "Custom problem created successfully")
+    );
+});
+
+export { getAllProblems, getProblemById, createCustomProblem };

@@ -20,21 +20,8 @@ To complete the MVP for the resume, the following features must be executed:
 
 
 
-[FEAT-4] Multi-language Support
-→ Problem: Currently only C++ is hardcoded.
-→ Architecture:
-  1. Pull Docker images: `gcc` (for C/C++), `python:3.12-slim`, `openjdk:21-slim`, `node:20-slim`.
-  2. Worker selects image + run command based on a new language dropdown in the editor.
-  3. Support standard languages: C, C++, Python, Java, and JavaScript (Node.js).
 
-[FEAT-5] Problem Bank & Test Case Runner
-→ Problem: Interviewers paste questions in chat. Submissions only run against custom input.
-→ Architecture:
-  1. `Problem` model in MongoDB with hidden test cases.
-  2. "Run" button executes sample cases. "Submit" executes all hidden cases and returns pass/fail metrics.
-  3. External Integrations: Allow interviewers to load LeetCode or Codeforces problems instantly by pasting a URL.
-  4. Custom Problems: Allow interviewers to draft and save their own custom problems on the fly.
-  5. Privacy: The Problem Bank UI and problem selection dropdown must be completely hidden from the Candidate role. Only the Interviewer can see the bank or change the active problem.
+
 
 [FEAT-6] Built-in Video Call
 → Problem: Requires a separate Zoom link.
@@ -94,10 +81,14 @@ COMPLETED ARCHIVE
 ✅ [FEAT-2] Session Data Model & Guest Auth Flow
 ✅ [FEAT-3] UI Overhaul: Dashboard to Interview View
 ✅ [FEAT-1] Collaborative Code Editor (Yjs) implemented successfully with real-time neon name tags and conflict-free cursor syncing.
+✅ [FEAT-4] Multi-language Support (C, C++, Java, Python, JavaScript) completely integrated into Executor engine and UI.
 ✅ [BUG-1] Socket initialized properly on JWT rehydration.
 ✅ [BUG-2] Ghost user bug fixed; logout now explicitly emits "leave-room".
 ✅ [BUG-3] Execution Worker architectural decoupling correctly implemented.
 ✅ [BUG-8] Missing WebSocket Error Boundaries wrapped in try/catch.
+✅ [BUG-9] Massive fix for Redis pub/sub deadlocks and nodemon temp-file infinite restarts causing dropped connections.
 ✅ [PERF-1 / PERF-8] 1.5s HTTP Polling eliminated. Replaced with instant Redis Pub/Sub WebSockets (<100ms latency).
 ✅ [PERF-6] Synchronous File I/O in Worker refactored to fs.promises to unblock event loop.
 ✅ [UI-POLISH] Overhauled IDE Console with dynamic verdict styling, Framer Motion animations, Terminal boot-up sequence, and improved remote cursor nametags.
+✅ [TEST-1] Comprehensive testing suite (test_codes.txt) generated for AC, WA, TLE, RE, CE, MLE.
+✅ [FEAT-5] Problem Bank & Test Case Runner (Custom Problems & Interviewer Privacy Controls; External Integrations excluded per revised scope).

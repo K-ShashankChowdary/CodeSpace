@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "../services/api";
 import CodeEditor from "../components/CodeEditor";
 import ProblemDropdown from "../components/ui/ProblemDropdown";
+import CustomProblemModal from "../components/ui/CustomProblemModal";
 import LanguageDropdown from "../components/ui/LanguageDropdown";
 import CountdownButton from "../components/ui/CountdownButton";
 import MultiplayerCursors from "../components/MultiplayerCursors";
@@ -37,7 +38,9 @@ function IDE() {
 
   // Problem & IDE State
   const [problem, setProblem] = useState(null);
+  const [allProblems, setAllProblems] = useState([]); // Question Bank
   const [isFetchingProblem, setIsFetchingProblem] = useState(true);
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("description");
   const activeTabRef = useRef(activeTab);
   const [history, setHistory] = useState([]);
@@ -214,6 +217,15 @@ function IDE() {
           const userIsInterviewer = !user.isGuest && interviewerId === currentUserId;
           setIsInterviewer(userIsInterviewer);
 
+          if (userIsInterviewer) {
+            try {
+              const allProbsRes = await api.get("/problems");
+              setAllProblems(allProbsRes.data.data || []);
+            } catch (err) {
+              console.error("Failed to fetch question bank", err);
+            }
+          }
+
           const emitJoinRoom = () => {
             if (!socket.connected) {
               socket.connect();
@@ -354,6 +366,26 @@ function IDE() {
     };
   }, [isInterviewer, activeRoomCode, navigate, currentUser, id]);
 
+  const handleCreateCustomProblem = async (problemData) => {
+    try {
+      const res = await api.post("/problems", problemData);
+      const newProblem = res.data.data;
+      setAllProblems(prev => [...prev, newProblem]);
+      showToast("Custom problem created!", "success");
+      setIsCustomModalOpen(false);
+      
+      // Optionally navigate to it immediately:
+      if (code) {
+        sessionStorage.setItem(`session-${activeRoomCode}-problem-${id}`, monacoEditorRef.current.getValue());
+      }
+      socket.emit("interviewer-changed-problem", { roomCode: activeRoomCode, problemId: newProblem._id });
+      navigate(`/problem/${newProblem._id}?session=${activeRoomCode}`);
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.message || "Failed to create problem", "error");
+    }
+  };
+
   const fetchHistory = useCallback(async () => {
     try {
       const response = await api.get(`/submissions/history/${id}`);
@@ -431,9 +463,6 @@ function IDE() {
       socket.off("sync-execution-result", handleSyncResult);
     };
   }, [id, activeRoomCode, currentUser, fetchHistory, isInterviewer]);
-
-
-  // Removed old fetchHistory location
 
   const handleLogout = async () => {
     try {
@@ -517,8 +546,6 @@ function IDE() {
     }
   };
 
-  // renderConsoleContent extracted to ConsolePanel
-
   if (isFetchingProblem)
     return (
       <div className="h-screen w-screen bg-[#0a0a0a] flex flex-col items-center justify-center">
@@ -526,13 +553,6 @@ function IDE() {
       </div>
     );
 
-  // ==========================================
-  // Both Interviewer and Candidate share the same IDE view.
-  // ==========================================
-
-  // ==========================================
-  // --- VIEW 2: CANDIDATE VIEW (Full IDE) ---
-  // ==========================================
   return (
     <>
       {showResetModal && (
@@ -632,15 +652,18 @@ function IDE() {
         navigate={navigate}
         isInterviewer={isInterviewer}
         room={room}
+        allProblems={allProblems}
         activeProblemId={id}
         activeRoomCode={activeRoomCode}
         problem={problem}
         status={status}
+        onCreateCustomClick={() => setIsCustomModalOpen(true)}
         onChangeProblem={(newId) => {
-          if (monacoEditorRef.current) {
+          // Save current code before switching
+          if (code) {
             sessionStorage.setItem(`session-${activeRoomCode}-problem-${id}`, monacoEditorRef.current.getValue());
           }
-          if (!socket.connected) socket.connect();
+          // Broadcast the problem switch to everyone
           socket.emit("interviewer-changed-problem", { roomCode: activeRoomCode, problemId: newId });
           navigate(`/problem/${newId}?session=${activeRoomCode}`);
         }}
@@ -725,9 +748,12 @@ function IDE() {
         </div>
       </div>
     </div>
-      {/* Interviewer Dashboard */}
-      
       {/* Toast Notifications */}
+      <CustomProblemModal
+        isOpen={isCustomModalOpen}
+        onClose={() => setIsCustomModalOpen(false)}
+        onSubmit={handleCreateCustomProblem}
+      />
     </>
   );
 }

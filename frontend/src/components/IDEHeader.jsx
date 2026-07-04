@@ -8,11 +8,13 @@ const IDEHeader = ({
   navigate,
   isInterviewer,
   room,
+  allProblems,
   activeProblemId,
   activeRoomCode,
   problem,
   status,
   onChangeProblem,
+  onCreateCustomClick,
   onEndInterview,
   onExitInterview,
   onLogout,
@@ -84,11 +86,12 @@ const IDEHeader = ({
         </button>
         <div className="h-4 w-px bg-zinc-800"></div>
         <div className="flex flex-col justify-center">
-          {isInterviewer && room?.problems?.length > 1 ? (
+          {isInterviewer ? (
             <ProblemDropdown
-              problems={room.problems}
+              problems={allProblems?.length > 0 ? allProblems : (room?.problems || [])}
               activeProblemId={activeProblemId}
               onChange={onChangeProblem}
+              onCreateCustomClick={onCreateCustomClick}
             />
           ) : (
             <h1 className="text-sm font-black text-white tracking-tight flex items-center gap-3 truncate max-w-[200px]">

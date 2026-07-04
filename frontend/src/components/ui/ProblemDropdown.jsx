@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Check } from 'lucide-react';
+import { ChevronDown, Check, Plus } from 'lucide-react';
 
-const ProblemDropdown = ({ problems, activeProblemId, onChange }) => {
+const ProblemDropdown = ({ problems, activeProblemId, onChange, onCreateCustomClick }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -79,6 +79,23 @@ const ProblemDropdown = ({ problems, activeProblemId, onChange }) => {
                   </motion.button>
                 );
               })}
+              
+              {onCreateCustomClick && (
+                <>
+                  <div className="h-px bg-zinc-700/50 my-1 mx-2" />
+                  <motion.button
+                    onClick={() => {
+                      setIsOpen(false);
+                      onCreateCustomClick();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left text-sm font-bold text-zinc-300 hover:bg-zinc-800/50 hover:text-white transition-all"
+                    whileHover={{ x: 4 }}
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Custom Problem</span>
+                  </motion.button>
+                </>
+              )}
             </div>
           </motion.div>
         )}
