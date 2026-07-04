@@ -147,6 +147,13 @@ function IDE() {
   const lastExecutionTypeRef = useRef(null);
   const lastExecutionTimeRef = useRef(null);
 
+  // Clear console when problem changes
+  useEffect(() => {
+    setOutput("");
+    setStatus("Idle");
+    setActiveTestCase(0);
+  }, [id]);
+
   const showToast = (message, type = "info") => {
     setToast({ message, type });
   };

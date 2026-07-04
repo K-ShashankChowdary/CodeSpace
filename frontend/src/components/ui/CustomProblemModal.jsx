@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Trash2 } from 'lucide-react';
-import Button from '../ui/Button';
+import Button from './Button';
 
 const CustomProblemModal = ({ isOpen, onClose, onSubmit }) => {
   const [title, setTitle] = useState('');

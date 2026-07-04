@@ -8,6 +8,7 @@ import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import Input from "../components/ui/Input";
 import Toast from "../components/ui/Toast";
+import CustomProblemModal from "../components/ui/CustomProblemModal";
 import { Search, Plus, Play, Info as InfoIcon, LogOut, LayoutGrid, Users, X, CheckCircle2 } from "lucide-react";
 
 function Dashboard() {
@@ -21,6 +22,7 @@ function Dashboard() {
   const [modalSearch, setModalSearch] = useState("");
   const [selectedProblems, setSelectedProblems] = useState([]);
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   
   // Toast Notification State
   const [toast, setToast] = useState(null);
@@ -71,6 +73,23 @@ function Dashboard() {
       showToast(error.response?.data?.message || "Failed to create session", "error");
     } finally {
       setIsCreatingRoom(false);
+    }
+  };
+
+  const handleCreateCustomProblem = async (problemData) => {
+    try {
+      const res = await api.post("/problems", problemData);
+      const newProblem = res.data.data;
+      setProblems(prev => [...prev, newProblem]);
+      showToast("Custom problem created!", "success");
+      setIsCustomModalOpen(false);
+      // Auto-select it in the room creation modal
+      if (!selectedProblems.includes(newProblem._id)) {
+        setSelectedProblems(prev => [...prev, newProblem._id]);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.message || "Failed to create problem", "error");
     }
   };
 
@@ -322,6 +341,18 @@ function Dashboard() {
                  </div>
                ) : (
                  <div className="flex flex-col gap-2">
+                   <div 
+                     onClick={() => setIsCustomModalOpen(true)} 
+                     className="p-4 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden flex items-center gap-4 border bg-[#0a0a0a] border-white/5 hover:border-white/10 hover:bg-white/[0.02] group"
+                   >
+                     <div className="w-10 h-10 rounded-xl flex items-center justify-center border bg-zinc-900 border-zinc-800">
+                       <Plus className="w-5 h-5 text-zinc-400 group-hover:text-white" />
+                     </div>
+                     <div className="min-w-0">
+                       <h3 className="text-sm font-black tracking-tight text-zinc-200 group-hover:text-white">Create Custom Problem</h3>
+                       <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">Draft your own question and hidden test cases</div>
+                     </div>
+                   </div>
                    {modalFilteredProblems.map(p => (
                      <div 
                        key={p._id} 
@@ -456,6 +487,12 @@ function Dashboard() {
           </div>
         </div>
       )}
+
+      <CustomProblemModal
+        isOpen={isCustomModalOpen}
+        onClose={() => setIsCustomModalOpen(false)}
+        onSubmit={handleCreateCustomProblem}
+      />
     </div>
   );
 }
