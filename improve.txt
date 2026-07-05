@@ -91,3 +91,4 @@ COMPLETED ARCHIVE
 ✅ [TEST-1] Comprehensive testing suite (test_codes.txt) generated for AC, WA, TLE, RE, CE, MLE.
 ✅ [FEAT-5] Problem Bank & Test Case Runner (Custom Problems & Interviewer Privacy Controls; External Integrations excluded per revised scope).
 ✅ [FEAT-8] LeetCode Scraper Integration (GraphQL API).
+✅ [UI-POLISH] IDE safety features (Back navigation intercept), animated countdowns, and robust Custom Problem Management (Delete UI & LeetCode format cleanup).
