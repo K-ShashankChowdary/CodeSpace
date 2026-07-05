@@ -2,6 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Room } from "../models/room.model.js";
+import { Problem } from "../models/problem.model.js";
 import crypto from "crypto";
 
 const createRoom = asyncHandler(async (req, res) => {
@@ -113,8 +114,16 @@ const closeRoom = asyncHandler(async (req, res) => {
         throw new ApiError(403, "Only the interviewer can close the interview room");
     }
 
-    room.isActive = false;
-    await room.save();
+    // Clean up any custom problems used in this room to prevent DB bloat
+    if (room.problems && room.problems.length > 0) {
+        await Problem.deleteMany({
+            _id: { $in: room.problems },
+            isCustom: true
+        });
+    }
+
+    // Delete the room document itself to remove excess data
+    await room.deleteOne();
 
     return res.status(200).json(
         new ApiResponse(200, null, "Interview room closed successfully")

@@ -488,6 +488,48 @@ function IDE() {
   const [showEndModal, setShowEndModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
+  // Intercept Browser Back Button & Refresh/Tab Close
+  useEffect(() => {
+    const handlePopState = (e) => {
+      // Prevent browser from navigating back immediately
+      window.history.pushState(null, null, window.location.href);
+      // Show our custom warning modal instead
+      if (isInterviewer) {
+        setShowEndModal(true);
+      } else {
+        setShowLeaveModal(true);
+      }
+    };
+
+    // Trap the back button
+    window.history.pushState(null, null, window.location.href);
+    window.addEventListener("popstate", handlePopState);
+    
+    // Warn on tab close / refresh
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isInterviewer]);
+
+  const handleDashboardClick = () => {
+    if (activeRoomCode) {
+      if (isInterviewer) {
+        setShowEndModal(true);
+      } else {
+        setShowLeaveModal(true);
+      }
+    } else {
+      navigate("/");
+    }
+  };
+
   const handleCloseRoom = async () => {
     if (!activeRoomCode) {
       navigate("/");
@@ -629,7 +671,7 @@ function IDE() {
               <Button variant="ghost" onClick={() => setShowLeaveModal(false)}>
                 Cancel
               </Button>
-              <CountdownButton duration={3} onComplete={() => {
+              <CountdownButton duration={5} onComplete={() => {
                 setShowLeaveModal(false);
                 if (!socket.connected) socket.connect();
                 socket.emit("leave-room", activeRoomCode);
@@ -657,6 +699,7 @@ function IDE() {
       )}
       <IDEHeader
         navigate={navigate}
+        onDashboardClick={handleDashboardClick}
         isInterviewer={isInterviewer}
         room={room}
         allProblems={allProblems}

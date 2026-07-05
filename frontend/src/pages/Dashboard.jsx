@@ -9,7 +9,7 @@ import Spinner from "../components/ui/Spinner";
 import Input from "../components/ui/Input";
 import Toast from "../components/ui/Toast";
 import CustomProblemModal from "../components/ui/CustomProblemModal";
-import { Search, Plus, Play, Info as InfoIcon, LogOut, LayoutGrid, Users, X, CheckCircle2 } from "lucide-react";
+import { Search, Plus, Play, Info as InfoIcon, LogOut, LayoutGrid, Users, X, CheckCircle2, Trash2 } from "lucide-react";
 
 function Dashboard() {
   const [problems, setProblems] = useState([]);
@@ -109,10 +109,26 @@ function Dashboard() {
     }
   };
 
-  const toggleProblemSelection = (pId) => {
-    setSelectedProblems(prev => 
-      prev.includes(pId) ? prev.filter(id => id !== pId) : [...prev, pId]
-    );
+  const toggleProblemSelection = (problemId) => {
+    setSelectedProblems(prev => {
+      if (!prev.includes(problemId)) {
+        return [...prev, problemId];
+      }
+      return prev.filter(id => id !== problemId);
+    });
+  };
+
+  const handleDeleteCustomProblem = async (problemId, e) => {
+    e.stopPropagation(); // prevent toggling selection
+    try {
+      await api.delete(`/problems/${problemId}`);
+      // Remove from all local states
+      setProblems(prev => prev.filter(p => p._id !== problemId));
+      setSelectedProblems(prev => prev.filter(id => id !== problemId));
+    } catch (error) {
+      console.error("Failed to delete custom problem:", error);
+      alert("Failed to delete custom problem");
+    }
   };
 
   const mainFilteredProblems = useMemo(() => {
@@ -368,7 +384,9 @@ function Dashboard() {
                             selectedProblems.includes(p._id) ? "bg-blue-500 border-blue-400" : "bg-zinc-900 border-zinc-800"
                          }`}>
                            {selectedProblems.includes(p._id) ? (
-                             <CheckCircle2 className="w-5 h-5 text-white" />
+                             <span className="text-white font-bold text-sm">
+                               {selectedProblems.indexOf(p._id) + 1}
+                             </span>
                            ) : null}
                          </div>
                          <div className="min-w-0">
@@ -386,6 +404,15 @@ function Dashboard() {
                            </div>
                          </div>
                        </div>
+                       {p.isCustom && (
+                          <button
+                            onClick={(e) => handleDeleteCustomProblem(p._id, e)}
+                            className="p-2 rounded-lg text-red-500/50 hover:text-red-500 hover:bg-red-500/10 transition-colors z-10"
+                            title="Delete custom problem"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                      </div>
                    ))}
                  </div>

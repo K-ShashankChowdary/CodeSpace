@@ -72,22 +72,26 @@ export default function InterviewEnded() {
         {/* Action Button */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
           <button
-            onClick={() => navigate("/")}
-            disabled={countdown > 0}
-            className={`flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-black uppercase tracking-widest transition-all duration-500 w-full sm:w-auto relative overflow-hidden shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] active:translate-y-[2px]
+            onClick={() => {
+              setCountdown(0); // This will trigger the navigate in useEffect immediately
+              navigate("/");
+            }}
+            className={`flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-black uppercase tracking-widest transition-all duration-300 w-full sm:w-auto relative overflow-hidden active:translate-y-[2px]
               ${countdown === 0 
-                ? 'bg-gradient-to-r from-emerald-400 to-cyan-500 text-black border border-emerald-400/50 border-b-[3px] border-b-emerald-700' 
-                : 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed border-b-[3px] border-b-black'
+                ? 'bg-gradient-to-r from-emerald-400 to-cyan-500 text-black border border-emerald-400/50 border-b-[3px] border-b-emerald-700 shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)]' 
+                : 'bg-zinc-800 text-white border border-zinc-700 hover:bg-zinc-700 border-b-[3px] border-b-black cursor-pointer'
               }
             `}
           >
-            {/* Background fill transition */}
-            <motion.div
-              initial={{ x: '-100%' }}
-              animate={{ x: countdown === 0 ? '0%' : '-100%' }}
-              transition={{ duration: 5, ease: "linear" }}
-              className="absolute inset-0 bg-gradient-to-r from-emerald-400/20 to-cyan-500/20"
-            />
+            {/* Background fill transition - starts full and drains over 5 seconds */}
+            {countdown > 0 && (
+              <motion.div
+                initial={{ width: '100%' }}
+                animate={{ width: '0%' }}
+                transition={{ duration: 5, ease: "linear" }}
+                className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-emerald-500/50 to-cyan-500/50 z-0 border-r border-emerald-400/50"
+              />
+            )}
 
             <span className="relative z-10 flex items-center gap-2">
               <Code2 className="w-5 h-5" />

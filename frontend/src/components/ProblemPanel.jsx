@@ -71,6 +71,10 @@ const ProblemPanel = ({
                   </div>
                 ))}
               </section>
+
+              <div className="mt-8 pt-4 border-t border-white/10 text-[10px] text-zinc-500 italic">
+                Note: Only publicly available test cases are shown here. Hidden test cases (if any) will only be evaluated upon submission.
+              </div>
             </div>
           </div>
         ) : (

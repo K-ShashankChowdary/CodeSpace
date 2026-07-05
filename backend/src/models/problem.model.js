@@ -31,8 +31,12 @@ const problemSchema = new Schema(
                     type: Boolean,
                     default: false  // hidden test cases only run during "submit", never shown to users
                 }
-            },
+            }
         ],
+        isCustom: {
+            type: Boolean,
+            default: false
+        }
     },
     { timestamps: true }
 );

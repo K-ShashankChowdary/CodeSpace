@@ -6,6 +6,7 @@ import { getFullStatus } from "./ui/StatusBadge";
 
 const IDEHeader = ({
   navigate,
+  onDashboardClick,
   isInterviewer,
   room,
   allProblems,
@@ -72,7 +73,7 @@ const IDEHeader = ({
     <header className="h-16 flex justify-between items-center glass-panel border-b border-white/[0.05] px-8 shrink-0 z-30">
       <div className="flex items-center gap-6">
         <button
-          onClick={() => navigate("/")}
+          onClick={onDashboardClick || (() => navigate("/"))}
           className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors group"
         >
           <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center border border-white/10 group-hover:bg-white/10 transition-colors">
@@ -88,7 +89,7 @@ const IDEHeader = ({
         <div className="flex flex-col justify-center">
           {isInterviewer ? (
             <ProblemDropdown
-              problems={allProblems?.length > 0 ? allProblems : (room?.problems || [])}
+              problems={activeRoomCode ? (room?.problems || []) : (allProblems || [])}
               activeProblemId={activeProblemId}
               onChange={onChangeProblem}
               onCreateCustomClick={onCreateCustomClick}

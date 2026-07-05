@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { X, Plus, Trash2, Download } from 'lucide-react';
 import Button from './Button';
+import Toast from './Toast';
+import api from '../../services/api';
 
 const CustomProblemModal = ({ isOpen, onClose, onSubmit }) => {
   const [title, setTitle] = useState('');
@@ -9,6 +11,36 @@ const CustomProblemModal = ({ isOpen, onClose, onSubmit }) => {
   const [difficulty, setDifficulty] = useState('Medium');
   const [testCases, setTestCases] = useState([{ input: '', output: '', isHidden: false }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [leetcodeUrl, setLeetcodeUrl] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = "info") => {
+    setToast({ message, type });
+  };
+
+  const handleLeetCodeImport = async () => {
+    if (!leetcodeUrl) return;
+    setIsImporting(true);
+    try {
+      const response = await api.post('/problems/leetcode', { url: leetcodeUrl });
+      if (response.data && response.data.success) {
+        const p = response.data.data;
+        setTitle(p.title);
+        setDescription(p.description);
+        setDifficulty(p.difficulty);
+        if (p.testCases && p.testCases.length > 0) {
+          setTestCases(p.testCases.map(tc => ({ ...tc, isHidden: false })));
+        }
+        showToast("Problem imported successfully!", "success");
+      }
+    } catch (error) {
+      console.error('Failed to import from LeetCode', error);
+      showToast(error?.response?.data?.message || 'Failed to import from LeetCode', 'error');
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const handleAddTestCase = () => {
     setTestCases([...testCases, { input: '', output: '', isHidden: false }]);
@@ -72,6 +104,33 @@ const CustomProblemModal = ({ isOpen, onClose, onSubmit }) => {
 
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
               <form id="custom-problem-form" onSubmit={handleSubmit} className="space-y-6">
+                {/* LeetCode Import Section */}
+                <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-3">
+                  <label className="block text-xs font-bold text-blue-400 uppercase tracking-wider">Import from LeetCode</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={leetcodeUrl}
+                      onChange={(e) => setLeetcodeUrl(e.target.value)}
+                      className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 text-sm"
+                      placeholder="https://leetcode.com/problems/two-sum/"
+                    />
+                    <Button type="button" variant="secondary" onClick={handleLeetCodeImport} disabled={isImporting || !leetcodeUrl}>
+                      {isImporting ? "Importing..." : <><Download className="w-4 h-4 mr-2" /> Import</>}
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-blue-400/70">
+                    Instantly fills the Title, Difficulty, Description, and Test Case Inputs. 
+                    <br />(Outputs will be auto-filled if they can be extracted from the description).
+                  </p>
+                  <div className="mt-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-3">
+                    <span className="text-yellow-400 text-sm leading-none">⚠️</span>
+                    <p className="text-[10px] text-yellow-400/90 leading-relaxed">
+                      <strong className="text-yellow-400">DISCLAIMER:</strong> LeetCode does not expose hidden test cases. Only the public examples will be imported. You must add any hidden test cases manually using the button below.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Title</label>
@@ -182,6 +241,16 @@ const CustomProblemModal = ({ isOpen, onClose, onSubmit }) => {
                 {isSubmitting ? "Creating..." : "Create Problem"}
               </Button>
             </div>
+
+            {toast && (
+              <div style={{ zIndex: 101, position: 'relative' }}>
+                <Toast
+                  message={toast.message}
+                  type={toast.type}
+                  onClose={() => setToast(null)}
+                />
+              </div>
+            )}
           </motion.div>
         </div>
       )}

@@ -12,21 +12,12 @@ This project is undergoing a massive architectural rewrite from V1 (Classroom) t
 → `main` branch: DO NOT use for active pivot development.
 → `v1-classroom` branch: The perfectly stable, completed Classroom app. Use this branch ONLY if a critical bug fix needs to be deployed to the legacy app or if you need to demonstrate the old app.
 → `v2-interview-pivot` branch: **Active Development Branch**. ALL work for the EPICS below must happen on this branch. We will merge back to `main` only when the V2 MVP is 100% complete and tested.
-
 CodeSpace is pivoting from a 1-to-many "Classroom" tool to a 1-to-1 "Technical Interview" platform.
 To complete the MVP for the resume, the following features must be executed:
-
-
-
-
-
-
-
 
 [FEAT-6] Built-in Video Call
 → Problem: Requires a separate Zoom link.
 → Architecture: Embed a Daily.co iframe into a resizable side panel next to the code editor.
-
 [FEAT-7] Public Landing Page
 → Problem: The app has no public-facing page. Unauthenticated users hit the login form with zero context about what CodeSpace is.
 → Architecture:
@@ -35,6 +26,13 @@ To complete the MVP for the resume, the following features must be executed:
   3. CTA "Start Interviewing" links to `/auth`.
   4. Scroll-driven animations for section reveals, glassmorphism panels, neon accents matching the app's dark theme.
 → Done when: A recruiter can land on the page, understand the product in 10 seconds, and click through to sign up.
+
+[FEAT-9] Authenticated Dashboard Overhaul (Scheduled for Day After Tomorrow)
+→ Problem: After login, the dashboard looks like a LeetCode problem set rather than a technical interview platform.
+→ Architecture: 
+  1. Redesign `/dashboard` to act as an "Interview Command Center".
+  2. Hero section: Large "Start New Interview" button that instantly creates a room and shows the link.
+  3. Sections: "Recent Sessions" (history of past interviews), "Saved Custom Problems", and "Question Bank".
 
 =============================================================
 RELIABILITY & ENGINE POLISH
@@ -92,3 +90,4 @@ COMPLETED ARCHIVE
 ✅ [UI-POLISH] Overhauled IDE Console with dynamic verdict styling, Framer Motion animations, Terminal boot-up sequence, and improved remote cursor nametags.
 ✅ [TEST-1] Comprehensive testing suite (test_codes.txt) generated for AC, WA, TLE, RE, CE, MLE.
 ✅ [FEAT-5] Problem Bank & Test Case Runner (Custom Problems & Interviewer Privacy Controls; External Integrations excluded per revised scope).
+✅ [FEAT-8] LeetCode Scraper Integration (GraphQL API).

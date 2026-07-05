@@ -5,6 +5,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Session } from "../models/session.model.js";
 import { Problem } from "../models/problem.model.js";
+import { Submission } from "../models/submission.model.js";
 import crypto from "crypto";
 
 dotenv.config({ path: "./.env" });
@@ -144,16 +145,22 @@ const closeSession = asyncHandler(async (req, res) => {
         throw new ApiError(403, "Only the interviewer can close this session");
     }
 
-    if (session.status === "ended") {
-        throw new ApiError(400, "Session is already ended");
+    // Clean up any custom problems used in this session to prevent DB bloat
+    if (session.problemIds && session.problemIds.length > 0) {
+        await Problem.deleteMany({
+            _id: { $in: session.problemIds },
+            isCustom: true
+        });
     }
 
-    session.status = "ended";
-    session.endedAt = new Date();
-    await session.save();
+    // Clean up any submissions associated with this session
+    await Submission.deleteMany({ sessionId: session._id.toString() });
+
+    // Delete the session document itself to remove all excess data
+    await session.deleteOne();
 
     return res.status(200).json(
-        new ApiResponse(200, null, "Session closed successfully")
+        new ApiResponse(200, null, "Session closed and data cleaned successfully")
     );
 });
 
