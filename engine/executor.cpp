@@ -233,7 +233,21 @@ int main(int argc, char *argv[])
             {
                 status = "MLE"; // FIX: Catch heap exhaustion across C++, Java, JS, Python
             }
-            // 3. Catch-all for Runtime Errors (Segfaults, Out of Bounds, etc.)
+            // 3. Specific fatal signal subtypes for Runtime Errors
+            // Exit code = 128 + signal number (shell convention)
+            else if (exit_code == 139) // SIGSEGV (signal 11): null pointer, out-of-bounds access
+            {
+                status = "RE (SIGSEGV)";
+            }
+            else if (exit_code == 134) // SIGABRT (signal 6): assert failure, abort() called
+            {
+                status = "RE (SIGABRT)";
+            }
+            else if (exit_code == 136) // SIGFPE (signal 8): divide by zero, overflow
+            {
+                status = "RE (SIGFPE)";
+            }
+            // 4. Catch-all for any other Runtime Error
             else
             {
                 status = "RE";

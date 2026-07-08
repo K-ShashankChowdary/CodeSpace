@@ -1,21 +1,22 @@
 import React, { useState, useEffect } from "react";
+// eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 
-const TerminalLoader = () => {
+const sequence = [
+  "> Initiating connection to execution engine...",
+  "> Handshake successful. Secure channel established.",
+  "> Uploading source code payload to backend server...",
+  "> Spawning isolated sandboxed container...",
+  "> Allocating CPU and memory limits...",
+  "> Compiling source code...",
+  "> Executing test cases...",
+  "> Awaiting execution results...",
+  "> Fetching verdicts...",
+  "> Processing output stream..."
+];
+
+const TerminalLoader = ({ onComplete }) => {
   const [lines, setLines] = useState([]);
-  
-  const sequence = [
-    "> Initiating connection to execution engine...",
-    "> Handshake successful. Secure channel established.",
-    "> Uploading source code payload to backend server...",
-    "> Spawning isolated sandboxed container...",
-    "> Allocating CPU and memory limits...",
-    "> Compiling source code...",
-    "> Executing test cases...",
-    "> Awaiting execution results...",
-    "> Fetching verdicts...",
-    "> Processing output stream..."
-  ];
   
   useEffect(() => {
     let currentLine = 0;
@@ -25,11 +26,12 @@ const TerminalLoader = () => {
         currentLine++;
       } else {
         clearInterval(interval);
+        if (onComplete) onComplete();
       }
     }, 350);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [onComplete]);
 
   return (
     <div className="flex flex-col h-full w-full bg-[#050505] p-5 rounded-xl font-mono text-xs overflow-hidden border border-white/5 relative shadow-inner">

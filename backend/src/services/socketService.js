@@ -1,7 +1,6 @@
 import dotenv from "dotenv";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
-import { Room } from "../models/room.model.js";
 import { Submission } from "../models/submission.model.js";
 import { createClient } from "redis";
 
@@ -100,25 +99,14 @@ export const initializeSockets = (httpServer) => {
         if (userId) socket.data.userId = userId;
         if (username) socket.data.username = username;
 
-        // Try Room first, fallback to Session
-        let entity = await Room.findOne({ roomCode, isActive: true }).populate(
-          "candidateProgress.candidateId",
-          "username"
-        );
-        let isSession = false;
+        const { Session } = await import("../models/session.model.js");
+        const entity = await Session.findOne({ 
+          sessionCode: roomCode, 
+          status: { $in: ["waiting", "active"] } 
+        }).populate("candidate", "username");
 
         if (!entity) {
-          const { Session } = await import("../models/session.model.js");
-          // Allow joining both 'waiting' and 'active' sessions. 
-          entity = await Session.findOne({ 
-            sessionCode: roomCode, 
-            status: { $in: ["waiting", "active"] } 
-          }).populate("candidate", "username");
-          isSession = true;
-        }
-
-        if (!entity) {
-          console.warn(`[Socket] Room/Session not found for code: ${roomCode}`);
+          console.warn(`[Socket] Session not found for code: ${roomCode}`);
           return;
         }
 
@@ -128,13 +116,6 @@ export const initializeSockets = (httpServer) => {
         socket.data.isInterviewer = isInterviewer;
 
         if (isInterviewer) {
-          if (!isSession) {
-            const allProgress = entity.candidateProgress.map((p) => ({
-              username: p.candidateId?.username,
-              results: Object.fromEntries(p.results),
-            }));
-            socket.emit("sync-entire-leaderboard", allProgress);
-          }
           
           // Sync all currently connected candidates for the interviewer (solves the refresh issue)
           const socketsInRoom = await io.in(roomCode).fetchSockets();
@@ -161,42 +142,16 @@ export const initializeSockets = (httpServer) => {
     socket.on("candidate-submission", async (data) => {
       const { roomCode, status, problemId, username } = data;
       try {
-        let entity = await Room.findOne({ roomCode, isActive: true });
-        let isSession = false;
+        const { Session } = await import("../models/session.model.js");
+        const entity = await Session.findOne({ 
+          sessionCode: roomCode, 
+          status: { $in: ["waiting", "active"] } 
+        });
 
-        if (!entity) {
-          const { Session } = await import("../models/session.model.js");
-          entity = await Session.findOne({ 
-            sessionCode: roomCode, 
-            status: { $in: ["waiting", "active"] } 
-          });
-          isSession = true;
-        }
         if (!entity) return;
 
-        if (!isSession) {
-          if (!socket.data.userId) return; // Guests cannot interact with legacy multi-user Rooms
-          
-          let progress = entity.candidateProgress.find(
-            (p) => p.candidateId.toString() === socket.data.userId.toString()
-          );
-          if (!progress) {
-            progress = { candidateId: socket.data.userId, results: new Map() };
-            entity.candidateProgress.push(progress);
-          }
-          const currentStatusInDB = progress.results.get(problemId);
-          if (currentStatusInDB !== "AC") {
-            progress.results.set(problemId, status);
-            entity.markModified("candidateProgress");
-            await entity.save();
-            io.to(roomCode).emit("leaderboard-update", { username, problemId, status });
-          } else {
-            io.to(roomCode).emit("leaderboard-update", { username, problemId, status: "AC" });
-          }
-        } else {
-          // For 1:1 Session, just broadcast the status (backend persistance is in Session model if needed later)
-          io.to(roomCode).emit("leaderboard-update", { username, problemId, status });
-        }
+        // For 1:1 Session, just broadcast the status (backend persistance is in Session model if needed later)
+        io.to(roomCode).emit("leaderboard-update", { username, problemId, status });
       } catch (error) {
         console.error("Submission Error:", error);
       }
@@ -232,6 +187,27 @@ export const initializeSockets = (httpServer) => {
     socket.on("sync-execution-result", (data) => {
       if (socket.data.roomCode) {
         socket.to(socket.data.roomCode).emit("sync-execution-result", data);
+      }
+    });
+
+    // RELAY MOUSE CURSORS TO ROOM
+    socket.on("sync-cursor", (data) => {
+      if (socket.data.roomCode) {
+        socket.to(socket.data.roomCode).emit("sync-cursor", data);
+      }
+    });
+
+    // EXPLICIT LEAVE (candidate clicks Exit Interview)
+    socket.on("leave-room", (roomCode) => {
+      const targetRoom = roomCode || socket.data.roomCode;
+      if (targetRoom && !socket.data.isInterviewer) {
+        console.log(`👤 Candidate Explicitly Left: ${socket.data.username} from ${targetRoom}`);
+        socket.to(targetRoom).emit("candidate-left", { 
+          _id: socket.data.userId || socket.data.username, 
+          username: socket.data.username 
+        });
+        socket.leave(targetRoom);
+        socket.data.roomCode = null;
       }
     });
 
