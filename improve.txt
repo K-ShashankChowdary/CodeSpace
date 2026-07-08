@@ -1,7 +1,7 @@
 # CodeSpace — Improvement Backlog
 # Vision: Free, open-source technical interview platform (CoderPad alternative)
 # Pitch: "Run real coding interviews without paying $50/seat/month"
-# Last updated: June 22 2026
+# Last updated: July 8 2026
 
 =============================================================
 THE INTERVIEW PLATFORM PIVOT (CURRENT FOCUS)
@@ -18,6 +18,8 @@ To complete the MVP for the resume, the following features must be executed:
 [FEAT-6] Built-in Video Call
 → Problem: Requires a separate Zoom link.
 → Architecture: Embed a Daily.co iframe into a resizable side panel next to the code editor.
+→ Status: NOT STARTED
+
 [FEAT-7] Public Landing Page
 → Problem: The app has no public-facing page. Unauthenticated users hit the login form with zero context about what CodeSpace is.
 → Architecture:
@@ -26,13 +28,7 @@ To complete the MVP for the resume, the following features must be executed:
   3. CTA "Start Interviewing" links to `/auth`.
   4. Scroll-driven animations for section reveals, glassmorphism panels, neon accents matching the app's dark theme.
 → Done when: A recruiter can land on the page, understand the product in 10 seconds, and click through to sign up.
-
-[FEAT-9] Authenticated Dashboard Overhaul (Scheduled for Day After Tomorrow)
-→ Problem: After login, the dashboard looks like a LeetCode problem set rather than a technical interview platform.
-→ Architecture: 
-  1. Redesign `/dashboard` to act as an "Interview Command Center".
-  2. Hero section: Large "Start New Interview" button that instantly creates a room and shows the link.
-  3. Sections: "Recent Sessions" (history of past interviews), "Saved Custom Problems", and "Question Bank".
+→ Status: NOT STARTED
 
 =============================================================
 RELIABILITY & ENGINE POLISH
@@ -40,9 +36,7 @@ RELIABILITY & ENGINE POLISH
 
 [OPS-1] Rate limiting on execution endpoint
 → Per-user limit: 10 runs/minute via Redis token bucket.
-
-[ENGINE-1] Specific RE subtypes (SIGSEGV / SIGABRT / SIGFPE)
-→ Map exit 139→SIGSEGV, 134→SIGABRT, 136→SIGFPE in executor.cpp.
+→ Status: NOT STARTED
 
 =============================================================
 DOCUMENTATION
@@ -52,6 +46,7 @@ DOCUMENTATION
 → Update header positioning.
 → Update Architecture Diagram to show Yjs CRDT + Redis Pub/Sub.
 → Add System Design notes explaining WHY Docker cgroups, WHY exit codes over stdout, WHY Socket.io over raw WS.
+→ Status: NOT STARTED
 
 =============================================================
 TECH DEBT (Low Priority)
@@ -92,3 +87,30 @@ COMPLETED ARCHIVE
 ✅ [FEAT-5] Problem Bank & Test Case Runner (Custom Problems & Interviewer Privacy Controls; External Integrations excluded per revised scope).
 ✅ [FEAT-8] LeetCode Scraper Integration (GraphQL API).
 ✅ [UI-POLISH] IDE safety features (Back navigation intercept), animated countdowns, and robust Custom Problem Management (Delete UI & LeetCode format cleanup).
+✅ [ENGINE-1] Specific RE subtypes: executor.cpp now maps exit 139→RE (SIGSEGV), 134→RE (SIGABRT), 136→RE (SIGFPE) instead of generic RE. All UI layers (StatusBadge, ConsolePanel, IDEHeader) updated to style and label subtypes correctly.
+✅ [FEAT-9] Dashboard Overhaul: CommandCenterTab simplified into Interview Command Center. Stats grid removed. Recent Sessions list with delete, empty-state, and one-click host flow.
+✅ [BUG-10] localColor use-before-declare crash in CodeEditor — declaration moved above handleEditorDidMount. Would have crashed the editor on mount.
+✅ [BUG-11] Own cursor shown as remote cursor in Yjs editor — isMe detection now uses customDisplayName for ALL users, not just interviewers.
+✅ [BUG-12] MultiplayerCursors pill showed login name instead of custom name — now reads sessionStorage customDisplayName before falling back to username.
+✅ [BUG-13] sync-cursor and leave-room socket events emitted by client but never handled on the server — both handlers added to socketService.js. Live cursors now work; explicit Exit triggers candidate-left immediately (not only on TCP disconnect).
+✅ [BUG-14] Dead V1 /rooms/details fallback in useWorkspaceData — removed. All room context now fetches from /sessions/details (V2 only). Old branch would crash with 404.
+✅ [BUG-15] Crash in handleCreateCustomProblem when monacoEditorRef.current is null before editor mounts — null guard added.
+✅ [BUG-16] Missing Users icon import in CommandCenterTab — restored (was used in empty-state UI but removed from import).
+✅ [BUG-17] isError check in ConsolePanel missed RE subtypes — updated to status.startsWith("RE") so SIGSEGV/SIGABRT/SIGFPE all get error styling.
+✅ [BUG-18] Stale guestToken persistence and double-loading in CodeEditor — fixed in earlier session.
+✅ [BUG-19] Unused `sessionCode` in useWorkspaceData effect dependency array causing spurious re-fetches — removed.
+✅ [BUG-20] ESLint error: `motion` imported but flagged as unused in IDE.jsx — suppressed with eslint-disable comment.
+
+=============================================================
+NEW IDEAS: MOCK INTERVIEW PLATFORM RESEARCH
+=============================================================
+- [RESEARCH] Pramp: Bi-directional peer interviews, integrated WebRTC video/audio, Interviewer "Playbook" (hints/solutions).
+- [RESEARCH] Interviewing.io: Anonymous mock interviews, Session Replays (recording keystrokes/audio).
+- [RESEARCH] Big Interview: AI-Powered feedback on delivery and behavioral answers.
+- [RESEARCH] Google Interview Warmup: Minimalist UI, real-time transcription, AI feedback on talking points and job-specific terminology.
+
+- [PROPOSED FEAT] Integrated Video & Audio (WebRTC directly in IDE to replace external links).
+- [PROPOSED FEAT] Interviewer "Playbook" Tab in ProblemPanel (hidden from candidate, shows optimal solution and hints).
+- [PROPOSED FEAT] Solo "AI Mock Interview" Mode for candidate practice.
+- [PROPOSED FEAT] Post-Interview Feedback Flow (rubric for interviewer, self-reflection for candidate).
+- [PROPOSED FEAT] Session Replays (record Yjs document history and terminal executions for playback).
