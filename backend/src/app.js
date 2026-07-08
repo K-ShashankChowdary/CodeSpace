@@ -24,14 +24,12 @@ app.use(cookieParser());
 import userRouter from "./routes/user.routes.js";
 import submissionRouter from "./routes/submission.routes.js";
 import problemRouter from "./routes/problem.routes.js";
-import roomRouter from "./routes/room.routes.js";
 import sessionRouter from "./routes/session.routes.js";
 
 // mount routes under versioned API paths
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/submissions", submissionRouter);
 app.use("/api/v1/problems", problemRouter);
-app.use("/api/v1/rooms", roomRouter);
 app.use("/api/v1/sessions", sessionRouter);
 
 // global error handler - catches all errors thrown by controllers via asyncHandler

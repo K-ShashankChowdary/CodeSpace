@@ -8,12 +8,14 @@ import {
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyJWTOrGuest } from "../middlewares/guestAuth.middleware.js";
+import { validate } from "../middlewares/validate.middleware.js";
+import { registerSchema, loginSchema } from "../validators/user.validator.js";
 
 const router = Router();
 
 // public routes
-router.route("/register").post(registerUser);
-router.route("/login").post(loginUser);
+router.route("/register").post(validate(registerSchema), registerUser);
+router.route("/login").post(validate(loginSchema), loginUser);
 router.route("/refresh-token").post(refreshAccessToken); // no auth needed since access token may be expired
 
 // protected routes (require valid JWT)
