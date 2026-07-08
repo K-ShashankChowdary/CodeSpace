@@ -1,8 +1,8 @@
 import React from "react";
 import { LogOut } from "lucide-react";
-import Button from "./ui/Button";
-import ProblemDropdown from "./ui/ProblemDropdown";
-import { getFullStatus } from "./ui/StatusBadge";
+import Button from "../ui/Button";
+import ProblemDropdown from "../ui/ProblemDropdown";
+import { getFullStatus } from "../ui/StatusBadge";
 
 const IDEHeader = ({
   navigate,
@@ -49,6 +49,9 @@ const IDEHeader = ({
           dot: "bg-purple-500 shadow-[0_0_5px_rgba(168,85,247,0.8)]"
         };
       case "RE":
+      case "RE (SIGSEGV)":
+      case "RE (SIGABRT)":
+      case "RE (SIGFPE)":
         return {
           box: "bg-pink-500/10 border-pink-500/20 !text-pink-500",
           dot: "bg-pink-500 shadow-[0_0_5px_rgba(236,72,153,0.8)]"

@@ -37,6 +37,9 @@ const Auth = () => {
       if (token) {
         localStorage.setItem("accessToken", token);
       }
+      
+      // Ensure any leftover guest sessions are cleared when logging in
+      localStorage.removeItem("guestToken");
 
       if (isLogin) {
         showToast("Logged in successfully!", "success");

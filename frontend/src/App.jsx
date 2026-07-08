@@ -4,7 +4,6 @@ import api from "./services/api";
 import Auth from "./pages/Auth";
 import IDE from "./pages/IDE";
 import Dashboard from "./pages/Dashboard";
-import RoomDashboard from "./pages/RoomDashboard";
 import GuestJoin from "./pages/GuestJoin";
 import InterviewEnded from "./pages/InterviewEnded";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -70,7 +69,6 @@ function App() {
     <ErrorBoundary>
       <Routes>
         <Route path="/" element={isAuthenticated ? <Dashboard /> : <Navigate to="/auth" />} />
-        <Route path="/room/:roomCode" element={isAuthenticated ? <RoomDashboard /> : <Navigate to="/auth" />} />
         {/* /problem/:id accessible to both logged-in users and guests (guest has guestToken in localStorage) */}
         <Route path="/problem/:id" element={isAuthenticated || localStorage.getItem("guestToken") ? <IDE /> : <Navigate to="/auth" />} />
         <Route path="/auth" element={!isAuthenticated ? <Auth /> : <Navigate to="/" />} />

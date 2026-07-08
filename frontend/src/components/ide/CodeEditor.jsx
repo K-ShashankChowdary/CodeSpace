@@ -34,6 +34,9 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
 
   // We only run multiplayer setup if we have a roomCode, otherwise this is a solo environment.
 
+  const [randomColor] = useState(() => userColors[Math.floor(Math.random() * userColors.length)]);
+  const localColor = roomCode ? (isInterviewer ? '#39ff14' : '#00e5ff') : randomColor;
+
   // Define custom high-fidelity black theme
   const handleEditorWillMount = (monaco) => {
     // Define a custom theme that matches the CodeSpace aesthetic
@@ -94,9 +97,12 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
 
     // Setup awareness (Cursor + Name)
     if (currentUser) {
+      const customName = sessionStorage.getItem("customDisplayName");
+      const displayName = customName ? customName : currentUser.username;
+      
       // Interviewer gets bright neon green, Candidate gets neon blue
       provider.awareness.setLocalStateField('user', {
-        name: currentUser.username,
+        name: displayName,
         color: localColor
       });
     }
@@ -125,7 +131,9 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
 
       clients.forEach(([clientId, state]) => {
         if (state.user && state.user.name) {
-          const isMe = currentUser && state.user.name === currentUser.username;
+          const customName = sessionStorage.getItem("customDisplayName");
+          const myDisplayName = customName ? customName : (currentUser ? currentUser.username : null);
+          const isMe = myDisplayName && state.user.name === myDisplayName;
           const isDuplicate = seenNames.has(state.user.name);
 
           // Hide if it's our own cursor from another tab, or a duplicate of someone else's tab
@@ -162,6 +170,16 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
     });
   };
 
+
+  // Single player mode: sync external code changes (e.g. problem boilerplate loading asynchronously)
+  useEffect(() => {
+    if (!roomCode && isEditorReady && editorRef.current) {
+      if (editorRef.current.getValue() !== code) {
+        editorRef.current.setValue(code || "");
+      }
+    }
+  }, [code, roomCode, isEditorReady]);
+
   // Cleanup WebSockets when unmounting or leaving the room
   useEffect(() => {
     return () => {
@@ -176,15 +194,15 @@ const CodeEditor = ({ code, setCode, language = "cpp", roomCode, currentUser, on
     };
   }, []);
 
-  const [randomColor] = useState(() => userColors[Math.floor(Math.random() * userColors.length)]);
-  const localColor = roomCode ? (isInterviewer ? '#39ff14' : '#00e5ff') : randomColor;
-
   // Update awareness when user roles resolve (since isInterviewer starts as false during initial API fetch)
   useEffect(() => {
     if (providerRef.current && currentUser) {
-      // Preserve existing state, just update color
+      const customName = sessionStorage.getItem("customDisplayName");
+      const displayName = customName ? customName : currentUser.username;
+      
+      // Preserve existing state, just update color and potentially name
       providerRef.current.awareness.setLocalStateField('user', {
-        name: currentUser.username,
+        name: displayName,
         color: localColor
       });
     }

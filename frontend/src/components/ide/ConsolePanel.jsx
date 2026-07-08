@@ -1,9 +1,10 @@
 import React from "react";
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
-import Button from "./ui/Button";
+import Button from "../ui/Button";
 import { Play, Send, Loader2, Rocket } from "lucide-react";
-import TerminalLoader from "./ui/TerminalLoader";
-import { getFullStatus } from "./ui/StatusBadge";
+import TerminalLoader from "../ui/TerminalLoader";
+import { getFullStatus } from "../ui/StatusBadge";
 
 const ConsolePanel = ({
   output,
@@ -69,6 +70,9 @@ const ConsolePanel = ({
             box: "bg-purple-500/10 text-purple-300 border border-purple-500/20 shadow-[inset_0_0_20px_rgba(168,85,247,0.05)]",
           };
         case "RE":
+        case "RE (SIGSEGV)":
+        case "RE (SIGABRT)":
+        case "RE (SIGFPE)":
           return {
             text: "text-pink-500 drop-shadow-[0_0_12px_rgba(236,72,153,0.4)]",
             dot: "bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.6)]",
@@ -184,7 +188,7 @@ const ConsolePanel = ({
       );
     }
 
-    const isError = ["CE", "RE", "TLE", "WA"].includes(status);
+    const isError = ["CE", "TLE", "WA", "IE"].includes(status) || status?.startsWith("RE");
     let cleanedOutput = "Output formatting failed.";
 
     if (typeof output === "string") {
@@ -215,7 +219,7 @@ const ConsolePanel = ({
             <div className="text-xs font-black uppercase text-rose-400 tracking-widest">Compilation Error</div>
           </div>
         )}
-        {status === "RE" && (
+        {status?.startsWith("RE") && (
           <div className="flex items-center gap-2 mb-4">
             <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
             <div className="text-xs font-black uppercase text-rose-400 tracking-widest">Runtime Error</div>

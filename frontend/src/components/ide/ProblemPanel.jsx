@@ -1,6 +1,7 @@
 import React from "react";
+// eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
-import StatusBadge from "./ui/StatusBadge";
+import StatusBadge from "../ui/StatusBadge";
 
 const ProblemPanel = ({
   problem,

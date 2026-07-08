@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { socket } from "../utils/socket";
+import { socket } from "../../utils/socket";
 
 // Helper to generate a consistent vibrant color based on a username
 const getColorFromName = (name) => {
@@ -33,9 +33,10 @@ export default function MultiplayerCursors({ activeRoomCode, currentUser }) {
         const yPct = (e.clientY / window.innerHeight) * 100;
         
         if (socket.connected) {
+          const customName = sessionStorage.getItem("customDisplayName");
           socket.emit("sync-cursor", {
             roomCode: activeRoomCode,
-            username: currentUser.username || currentUser.name,
+            username: customName || currentUser.username || currentUser.name,
             x: xPct,
             y: yPct
           });

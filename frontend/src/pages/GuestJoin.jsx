@@ -11,6 +11,7 @@ function GuestJoin() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
+  const [displayName, setDisplayName] = useState("");
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -31,14 +32,19 @@ function GuestJoin() {
     setIsLoading(true);
     setError("");
     try {
-      // Formally join the session on the backend using the logged-in user's name
-      const res = await api.post("/sessions/guest-join", {
-        name: currentUser.username,
-        sessionCode,
-      });
-      const { guestToken, activeProblem } = res.data.data;
+      if (displayName.trim()) {
+        sessionStorage.setItem("customDisplayName", displayName.trim());
+      } else {
+        sessionStorage.removeItem("customDisplayName");
+      }
       
-      localStorage.setItem("guestToken", guestToken);
+      // Clear any leftover guest token so the interviewer is properly authenticated
+      localStorage.removeItem("guestToken");
+      
+      // Fetch session details to get activeProblem without creating a guest token
+      const res = await api.get(`/sessions/details/${sessionCode}`);
+      const session = res.data.data;
+      const activeProblem = session.activeProblem || session.problemIds?.[0]?._id || session.problemIds?.[0];
       
       if (!activeProblem) {
         setError("No active problem found in this session.");
@@ -134,12 +140,22 @@ function GuestJoin() {
                   {currentUser.username.charAt(0).toUpperCase()}
                 </div>
               </div>
+              <div className="mb-4">
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Display Name (Confidential Mode)</label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder={`Leave blank to use '${currentUser.username}'`}
+                  className="w-full bg-[#1a1a1a] border border-zinc-700/60 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all"
+                />
+              </div>
               <div>
               <button
                 type="button"
                 onClick={handleAuthenticatedJoin}
                 disabled={isLoading}
-                className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-black uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] transform active:scale-[0.98]"
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-black uppercase tracking-widest transition-all duration-300 shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] transform active:scale-[0.98]"
               >
                 {isLoading ? "Joining..." : "Enter Room"}
               </button>
