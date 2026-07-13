@@ -8,24 +8,27 @@ import GuestJoin from "./pages/GuestJoin";
 import InterviewEnded from "./pages/InterviewEnded";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Spinner from "./components/ui/Spinner";
+import Landing from "./pages/Landing";
 import { socket } from "./utils/socket";
 
 function App() {
-  // null = checking, true = logged in, false = not logged in
+  // null = still checking, true = logged in, false = not logged in
   const [isAuthenticated, setIsAuthenticated] = useState(null);
   const location = useLocation();
 
-  // /join/* and /interview-ended routes are fully public — skip auth check entirely
-  const isGuestRoute = location.pathname.startsWith("/join/") || location.pathname === "/interview-ended";
+  // /join/* and /interview-ended are fully public — skip auth check entirely
+  const isGuestRoute =
+    location.pathname.startsWith("/join/") ||
+    location.pathname === "/interview-ended";
 
   useEffect(() => {
-    if (isGuestRoute) return; // don't hit /users/me for guest pages
+    if (isGuestRoute) return;
     const checkAuthStatus = async () => {
       try {
         const res = await api.get("/users/me");
         const user = res.data.data;
 
-        // Restrict guest access strictly to the interview workspace
+        // Restrict guest tokens strictly to the interview workspace
         if (user.isGuest && !location.pathname.startsWith("/problem/")) {
           localStorage.removeItem("guestToken");
           setIsAuthenticated(false);
@@ -33,18 +36,16 @@ function App() {
         }
 
         setIsAuthenticated(true);
-        if (!socket.connected) {
-          socket.connect();
-        }
-      } catch (err) {
-        console.error(err);
+        if (!socket.connected) socket.connect();
+      } catch {
+        // 401 / network error → treat as unauthenticated
         setIsAuthenticated(false);
       }
     };
     checkAuthStatus();
   }, [isGuestRoute, location.pathname]);
 
-  // Show the guest join page immediately — no auth spinner needed
+  // Guest routes: render immediately with no auth gate
   if (isGuestRoute) {
     return (
       <ErrorBoundary>
@@ -56,8 +57,31 @@ function App() {
     );
   }
 
-  // loading spinner while checking auth to prevent flash of wrong page
+  // While auth check is in-flight:
+  //  - "/" → show Landing immediately (avoids blank flash / unwanted redirect)
+  //  - "/auth" → show Auth immediately (user navigated there explicitly)
+  //  - protected pages (e.g. /problem/:id) → show spinner until resolved
   if (isAuthenticated === null) {
+    const isLandingOrAuth =
+      location.pathname === "/" || location.pathname === "/auth";
+
+    if (isLandingOrAuth) {
+      // Render the page the user actually requested right away
+      if (location.pathname === "/auth") {
+        return (
+          <ErrorBoundary>
+            <Auth />
+          </ErrorBoundary>
+        );
+      }
+      return (
+        <ErrorBoundary>
+          <Landing />
+        </ErrorBoundary>
+      );
+    }
+
+    // For everything else, wait with a spinner
     return (
       <div className="h-screen w-screen bg-[#030303] flex flex-col items-center justify-center">
         <Spinner size="md" label="Authenticating" />
@@ -68,12 +92,34 @@ function App() {
   return (
     <ErrorBoundary>
       <Routes>
-        <Route path="/" element={isAuthenticated ? <Dashboard /> : <Navigate to="/auth" />} />
-        {/* /problem/:id accessible to both logged-in users and guests (guest has guestToken in localStorage) */}
-        <Route path="/problem/:id" element={isAuthenticated || localStorage.getItem("guestToken") ? <IDE /> : <Navigate to="/auth" />} />
-        <Route path="/auth" element={!isAuthenticated ? <Auth /> : <Navigate to="/" />} />
+        {/* "/" → Dashboard if logged in, Landing if not */}
+        <Route
+          path="/"
+          element={isAuthenticated ? <Dashboard /> : <Landing />}
+        />
+
+        {/* "/auth" → Auth form if not logged in, redirect home if already logged in */}
+        <Route
+          path="/auth"
+          element={!isAuthenticated ? <Auth /> : <Navigate to="/" replace />}
+        />
+
+        {/* IDE: accessible to authenticated users and guests with a guestToken */}
+        <Route
+          path="/problem/:id"
+          element={
+            isAuthenticated || localStorage.getItem("guestToken") ? (
+              <IDE />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+
         <Route path="/interview-ended" element={<InterviewEnded />} />
-        <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/auth"} />} />
+
+        {/* Unknown paths → home (Landing for guests, Dashboard for users) */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </ErrorBoundary>
   );

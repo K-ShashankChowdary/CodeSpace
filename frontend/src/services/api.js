@@ -39,7 +39,11 @@ api.interceptors.response.use(
                 return api(originalRequest);
             } catch (refreshError) {
                 console.error("Session expired. Please log in again.");
-                if (window.location.pathname !== '/auth' && !isGuestRoute) {
+                // Only hard-redirect to /auth if the user is on a protected page.
+                // Never redirect from "/" (landing) or "/auth" — they are already public.
+                const publicPaths = ['/', '/auth'];
+                const isPublicPage = publicPaths.includes(window.location.pathname);
+                if (!isPublicPage && !isGuestRoute) {
                     window.location.href = '/auth';
                 }
                 return Promise.reject(refreshError);

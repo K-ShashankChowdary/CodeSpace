@@ -1,11 +1,13 @@
 import React, { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../services/api";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import Toast from "../components/ui/Toast";
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const [searchParams] = useSearchParams();
+  const [isLogin, setIsLogin] = useState(searchParams.get("mode") !== "signup");
   const [formData, setFormData] = useState({ username: "", email: "", password: "" });
   const [toast, setToast] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
