@@ -54,7 +54,7 @@ function IDE() {
     setLanguage,
     code,
     setCode
-  } = useIDEState(id);
+  } = useIDEState(id, activeRoomCode);
 
   // 2. Workspace Data (Socket connections, WebRTC, Roles, Data Fetching)
   const {
@@ -190,6 +190,15 @@ function IDE() {
     }
   };
 
+  useEffect(() => {
+    if (!activeRoomCode) return;
+    const handleSyncLanguage = (newLang) => {
+      setLanguage(newLang);
+    };
+    socket.on("sync-language", handleSyncLanguage);
+    return () => socket.off("sync-language", handleSyncLanguage);
+  }, [activeRoomCode, setLanguage]);
+
   // Intercept Back Button / Refresh
   useEffect(() => {
     const handlePopState = () => {
@@ -317,6 +326,9 @@ function IDE() {
                     language={language}
                     onChange={(lang) => {
                       setLanguage(lang);
+                      if (activeRoomCode) {
+                        socket.emit("sync-language", { roomCode: activeRoomCode, language: lang });
+                      }
                       const codeToSet = localStorage.getItem(`codespace-${id}-${lang}`) || problem?.boilerplate?.[{ cpp: "C++ 17", c: "C", python: "Python 3", java: "Java", javascript: "JavaScript" }[lang]] || BOILERPLATES[lang];
                       if (monacoEditorRef.current) {
                         monacoEditorRef.current.setValue(codeToSet);

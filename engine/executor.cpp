@@ -215,8 +215,16 @@ int main(int argc, char *argv[])
         {
             // The program (or compiler) exited with an error
 
-            // 1. Check for Compilation Error
-            if (raw_out.find("error:") != string::npos || 
+            // 1. Check for Internal Engine/Docker Errors
+            if (exit_code == 125 || 
+                raw_out.find("failed to connect to the docker API") != string::npos ||
+                raw_out.find("Cannot connect to the Docker daemon") != string::npos)
+            {
+                status = "IE";
+                exec_duration = 0;
+            }
+            // 2. Check for Compilation Error
+            else if (raw_out.find("error:") != string::npos || 
                 raw_out.find("fatal error:") != string::npos || 
                 raw_out.find("SyntaxError") != string::npos || 
                 raw_out.find("IndentationError") != string::npos || 

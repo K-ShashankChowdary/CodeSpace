@@ -53,6 +53,12 @@ export default function MultiplayerCursors({ activeRoomCode, currentUser }) {
 
     const handleSyncCursor = (data) => {
       const { username, x, y } = data;
+      
+      const customName = sessionStorage.getItem("customDisplayName");
+      const myDisplayName = customName || currentUser?.username || currentUser?.name;
+      
+      if (username === myDisplayName) return; // Hide our own ghost cursor from other tabs
+
       setCursors((prev) => ({
         ...prev,
         [username]: { x, y, lastSeen: Date.now() }

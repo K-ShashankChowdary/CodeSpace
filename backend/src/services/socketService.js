@@ -197,6 +197,13 @@ export const initializeSockets = (httpServer) => {
       }
     });
 
+    // RELAY LANGUAGE CHANGES
+    socket.on("sync-language", (data) => {
+      if (socket.data.roomCode) {
+        socket.to(socket.data.roomCode).emit("sync-language", data.language);
+      }
+    });
+
     // EXPLICIT LEAVE (candidate clicks Exit Interview)
     socket.on("leave-room", (roomCode) => {
       const targetRoom = roomCode || socket.data.roomCode;

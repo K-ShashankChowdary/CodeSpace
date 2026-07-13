@@ -8,7 +8,7 @@ export const BOILERPLATES = {
   javascript: `function solve() {\n    // Write your code here\n    \n}\n\nsolve();`
 };
 
-export const useIDEState = (problemId) => {
+export const useIDEState = (problemId, sessionCode = null) => {
   const [activeTab, setActiveTab] = useState("description");
   const activeTabRef = useRef(activeTab);
 
@@ -16,24 +16,32 @@ export const useIDEState = (problemId) => {
     activeTabRef.current = activeTab;
   }, [activeTab]);
 
+  const langKey = sessionCode ? `codespace-session-${sessionCode}-lang` : "codespace-lastLang";
+
   const [language, setLanguage] = useState(() => {
-    return localStorage.getItem("codespace-lastLang") || "cpp";
+    return localStorage.getItem(langKey) || localStorage.getItem("codespace-lastLang") || "cpp";
   });
 
   useEffect(() => {
-    localStorage.setItem("codespace-lastLang", language);
-  }, [language]);
+    localStorage.setItem(langKey, language);
+    localStorage.setItem("codespace-lastLang", language); // Keep global fallback updated
+  }, [language, langKey]);
+
+  const codeKey = sessionCode 
+    ? `codespace-session-${sessionCode}-problem-${problemId}-${language}` 
+    : `codespace-${problemId}-${language}`;
 
   const [code, setCode] = useState(() => {
     if (!problemId) return BOILERPLATES["cpp"];
-    return localStorage.getItem(`codespace-${problemId}-${language}`) || BOILERPLATES[language] || BOILERPLATES["cpp"];
+    return localStorage.getItem(codeKey) || localStorage.getItem(`codespace-${problemId}-${language}`) || BOILERPLATES[language] || BOILERPLATES["cpp"];
   });
 
   useEffect(() => {
     if (code && problemId) {
+      localStorage.setItem(codeKey, code);
       localStorage.setItem(`codespace-${problemId}-${language}`, code);
     }
-  }, [code, language, problemId]);
+  }, [code, language, problemId, codeKey]);
 
   return {
     activeTab,

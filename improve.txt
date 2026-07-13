@@ -20,15 +20,6 @@ To complete the MVP for the resume, the following features must be executed:
 → Architecture: Embed a Daily.co iframe into a resizable side panel next to the code editor.
 → Status: NOT STARTED
 
-[FEAT-7] Public Landing Page
-→ Problem: The app has no public-facing page. Unauthenticated users hit the login form with zero context about what CodeSpace is.
-→ Architecture:
-  1. New route `/landing` (or `/`) for unauthenticated users — full-screen hero, feature highlights, and CTA.
-  2. Sections: Hero (headline + CTA), Features (collaborative editor, real-time verdict, problem bank), How It Works, and Footer.
-  3. CTA "Start Interviewing" links to `/auth`.
-  4. Scroll-driven animations for section reveals, glassmorphism panels, neon accents matching the app's dark theme.
-→ Done when: A recruiter can land on the page, understand the product in 10 seconds, and click through to sign up.
-→ Status: NOT STARTED
 
 =============================================================
 RELIABILITY & ENGINE POLISH
@@ -101,6 +92,7 @@ COMPLETED ARCHIVE
 ✅ [BUG-19] Unused `sessionCode` in useWorkspaceData effect dependency array causing spurious re-fetches — removed.
 ✅ [BUG-20] ESLint error: `motion` imported but flagged as unused in IDE.jsx — suppressed with eslint-disable comment.
 ✅ [TEST-2] End-to-end Backend API and Execution Pipeline Automated Tests created (check_db.js, test-api.js, test-execution.js) and passing. Verified 0 backend/frontend runtime bugs or errors on app startup.
+✅ [FEAT-7] Public Landing Page: Created high-conversion, responsive landing page (`/`) with modular components, glassmorphism design, and Framer Motion animations.
 
 =============================================================
 NEW IDEAS: MOCK INTERVIEW PLATFORM RESEARCH
@@ -115,3 +107,17 @@ NEW IDEAS: MOCK INTERVIEW PLATFORM RESEARCH
 - [PROPOSED FEAT] Solo "AI Mock Interview" Mode for candidate practice.
 - [PROPOSED FEAT] Post-Interview Feedback Flow (rubric for interviewer, self-reflection for candidate).
 - [PROPOSED FEAT] Session Replays (record Yjs document history and terminal executions for playback).
+
+=============================================================
+AUTH & ONBOARDING
+=============================================================
+
+[AUTH-1] OAuth / Social Login (Google, Apple, GitHub)
+→ Problem: Email/password signup adds friction for new interviewers.
+→ Solution: Add OAuth 2.0 via Passport.js (Google, Apple, GitHub providers).
+  - Backend: /auth/google, /auth/apple, /auth/github strategy routes.
+  - On success: issue same JWT + refresh token pair as email flow.
+  - Frontend: "Continue with Google / Apple / GitHub" buttons on Auth page.
+  - Apple Sign-In requires HTTPS + Apple Developer account (deploy-gate).
+→ Priority: HIGH — reduces signup drop-off on landing page.
+→ Status: NOT STARTED
