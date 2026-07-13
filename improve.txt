@@ -43,11 +43,13 @@ DOCUMENTATION
 TECH DEBT (Low Priority)
 =============================================================
 
-[PERF-7] Redundant N+1 Queries on Registration
-→ `user.controller.js` executes 4 sequential database queries for a single user registration. Refactor to use active Mongoose document in memory.
-
-[CLEAN-3] Unnecessary DB Query in Loop
-→ `room.controller.js` runs `await Room.findOne()` inside a loop. Use `nanoid` and MongoDB unique index instead.
+[TECH DEBT — COMPLETED]
+✅ [PERF-7] Redundant N+1 Queries on Registration
+   → Eliminated 2 extra DB calls in registerUser and loginUser by reusing
+     the in-memory Mongoose document instead of re-fetching with findById.
+✅ [CLEAN-3] findOne() Inside Loop in session.service.js
+   → Replaced read-before-write pattern (up to 5 findOne calls) with an
+     optimistic insert that retries on MongoDB E11000 duplicate key error.
 
 =============================================================
 FUTURE EXPLORATION (CoderPad Features)

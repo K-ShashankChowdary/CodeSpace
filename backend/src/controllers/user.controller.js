@@ -6,14 +6,19 @@ import jwt from "jsonwebtoken";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: true, // Required for sameSite: "none" over HTTPS
-  sameSite: "none", // Required for cross-origin cookie delivery from Vercel to DuckDNS
-  path: "/", 
+  secure: true,       // Required for sameSite: "none" over HTTPS
+  sameSite: "none",   // Required for cross-origin cookie delivery from Vercel to DuckDNS
+  path: "/",
 };
 
-const generateAccessAndRefreshTokens = async (userId) => {
+/**
+ * Generates access + refresh tokens for an already-fetched user document.
+ * Accepts the full user Mongoose document so callers avoid an extra findById.
+ *
+ * @param {import("mongoose").Document} user - An in-memory Mongoose user document.
+ */
+const generateTokensForUser = async (user) => {
   try {
-    const user = await User.findById(userId);
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
 
@@ -27,6 +32,19 @@ const generateAccessAndRefreshTokens = async (userId) => {
   }
 };
 
+/**
+ * Returns a plain object of the user with sensitive fields stripped.
+ * Avoids a second findById + .select() round-trip to the database.
+ *
+ * @param {import("mongoose").Document} user
+ */
+const toSafeUser = (user) => {
+  const obj = user.toObject();
+  delete obj.password;
+  delete obj.refreshToken;
+  return obj;
+};
+
 const registerUser = asyncHandler(async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -37,16 +55,16 @@ const registerUser = asyncHandler(async (req, res) => {
   const existedUser = await User.findOne({ $or: [{ username }, { email }] });
   if (existedUser) throw new ApiError(409, "User already exists");
 
+  // User.create() returns the full Mongoose document — reuse it directly
+  // instead of fetching it again with findById (eliminates 2 extra DB calls).
   const user = await User.create({ username, email, password });
-  const createdUser = await User.findById(user._id).select("-password -refreshToken");
-
-  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+  const { accessToken, refreshToken } = await generateTokensForUser(user);
 
   return res
     .status(201)
     .cookie("accessToken", accessToken, COOKIE_OPTIONS)
     .cookie("refreshToken", refreshToken, COOKIE_OPTIONS)
-    .json(new ApiResponse(201, { user: createdUser, accessToken }, "User registered and logged in"));
+    .json(new ApiResponse(201, { user: toSafeUser(user), accessToken }, "User registered and logged in"));
 });
 
 const loginUser = asyncHandler(async (req, res) => {
@@ -54,30 +72,30 @@ const loginUser = asyncHandler(async (req, res) => {
 
   if (!username && !email) throw new ApiError(400, "Username or email is required");
 
-  // 🚨 THE FIX: Only add the fields to the query if they actually exist in the request
   const searchConditions = [];
   if (username) searchConditions.push({ username });
   if (email) searchConditions.push({ email });
 
   const user = await User.findOne({ $or: searchConditions });
-  
   if (!user) throw new ApiError(401, "Invalid credentials");
 
   const isPasswordValid = await user.isPasswordCorrect(password);
   if (!isPasswordValid) throw new ApiError(401, "Invalid credentials");
 
-  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
-  const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+  // Reuse the existing user document — eliminates the redundant findById
+  // that was being done after generateAccessAndRefreshTokens.
+  const { accessToken, refreshToken } = await generateTokensForUser(user);
 
   return res
     .status(200)
     .cookie("accessToken", accessToken, COOKIE_OPTIONS)
     .cookie("refreshToken", refreshToken, COOKIE_OPTIONS)
-    .json(new ApiResponse(200, { user: loggedInUser, accessToken }, "Logged in successfully"));
+    .json(new ApiResponse(200, { user: toSafeUser(user), accessToken }, "Logged in successfully"));
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-  await User.findByIdAndUpdate(req.user._id, { $unset: { refreshToken: 1 } }, { returnDocument: 'after' });
+  // req.user is already attached by the auth middleware — no extra DB call needed.
+  await User.findByIdAndUpdate(req.user._id, { $unset: { refreshToken: 1 } });
 
   return res
     .status(200)
@@ -102,7 +120,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       throw new ApiError(401, "Refresh token is invalid or expired");
     }
 
-    const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(user._id);
+    const { accessToken, refreshToken: newRefreshToken } = await generateTokensForUser(user);
 
     return res
       .status(200)
@@ -115,4 +133,3 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 });
 
 export { registerUser, loginUser, logoutUser, getCurrentUser, refreshAccessToken };
-

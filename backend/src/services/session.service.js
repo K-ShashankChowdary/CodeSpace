@@ -12,24 +12,30 @@ class SessionService {
       throw new ApiError(400, "One or more problem IDs are invalid");
     }
 
-    let sessionCode;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      sessionCode = crypto.randomBytes(3).toString("hex").toUpperCase();
-      const existing = await Session.findOne({ sessionCode, status: { $ne: "ended" } });
-      if (!existing) break;
-      if (attempt === 4) throw new ApiError(500, "Failed to generate unique session code");
+    // Optimistic insert: generate a code and attempt to create the session directly.
+    // If the sessionCode collides (MongoDB E11000 duplicate key), generate a new one
+    // and retry — up to 5 times. This replaces a findOne()-per-attempt pattern
+    // (up to 5 read round-trips) with at most 1 write per attempt.
+    const MAX_ATTEMPTS = 5;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const sessionCode = crypto.randomBytes(3).toString("hex").toUpperCase();
+      try {
+        const session = await Session.create({
+          sessionCode,
+          interviewer: interviewerId,
+          problemIds,
+          activeProblem: problemIds[0],
+          status: "waiting",
+        });
+        return session;
+      } catch (err) {
+        // E11000: duplicate key — sessionCode already exists, retry with a new one.
+        if (err.code === 11000 && attempt < MAX_ATTEMPTS - 1) continue;
+        throw new ApiError(500, "Failed to generate a unique session code. Please try again.");
+      }
     }
-
-    const session = await Session.create({
-      sessionCode,
-      interviewer: interviewerId,
-      problemIds,
-      activeProblem: problemIds[0],
-      status: "waiting",
-    });
-
-    return session;
   }
+
 
   async guestJoin(name, sessionCode) {
     const session = await Session.findOne({
