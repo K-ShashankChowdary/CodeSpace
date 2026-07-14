@@ -13,6 +13,10 @@ const variants = {
     "bg-gradient-to-br from-emerald-400 to-green-600 border-[6px] border-solid border-t-emerald-200 border-l-emerald-400 border-r-green-700 border-b-green-900 text-white drop-shadow-[0_0_12px_rgba(52,211,153,0.6)] hover:brightness-110 hover:drop-shadow-[0_0_20px_rgba(52,211,153,0.9)] active:brightness-90 active:scale-95 shadow-[inset_0_2px_15px_rgba(255,255,255,0.4)]",
   ghost:
     "bg-transparent border-[6px] border-solid border-transparent text-zinc-400 hover:text-white hover:bg-white/[0.05] drop-shadow-none hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] active:brightness-90 active:scale-95",
+  google:
+    "bg-gradient-to-br from-white to-gray-200 border-[6px] border-solid border-t-white border-l-gray-100 border-r-gray-300 border-b-gray-400 text-gray-800 drop-shadow-[0_0_8px_rgba(255,255,255,0.2)] hover:brightness-105 active:brightness-95 active:scale-95 shadow-[inset_0_2px_15px_rgba(0,0,0,0.05)]",
+  github:
+    "bg-gradient-to-br from-[#24292F] to-[#1F2328] border-[6px] border-solid border-t-[#3b4148] border-l-[#30353c] border-r-[#15181b] border-b-[#0b0c0e] text-white drop-shadow-[0_0_8px_rgba(0,0,0,0.4)] hover:brightness-110 active:brightness-90 active:scale-95 shadow-[inset_0_2px_15px_rgba(255,255,255,0.05)]",
 };
 
 const sizes = {
