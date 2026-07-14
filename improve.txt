@@ -114,12 +114,10 @@ NEW IDEAS: MOCK INTERVIEW PLATFORM RESEARCH
 AUTH & ONBOARDING
 =============================================================
 
-[AUTH-1] OAuth / Social Login (Google, Apple, GitHub)
+[AUTH-1] OAuth / Social Login (Google, GitHub)
 → Problem: Email/password signup adds friction for new interviewers.
-→ Solution: Add OAuth 2.0 via Passport.js (Google, Apple, GitHub providers).
-  - Backend: /auth/google, /auth/apple, /auth/github strategy routes.
+→ Solution: Add OAuth 2.0 via Passport.js (Google, GitHub providers).
+  - Backend: /auth/google, /auth/github strategy routes.
   - On success: issue same JWT + refresh token pair as email flow.
-  - Frontend: "Continue with Google / Apple / GitHub" buttons on Auth page.
-  - Apple Sign-In requires HTTPS + Apple Developer account (deploy-gate).
-→ Priority: HIGH — reduces signup drop-off on landing page.
-→ Status: NOT STARTED
+  - Frontend: "Continue with Google / GitHub" buttons on Auth page.
+→ Status: ✅ COMPLETED
