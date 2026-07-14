@@ -132,4 +132,19 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   }
 });
 
-export { registerUser, loginUser, logoutUser, getCurrentUser, refreshAccessToken };
+const oauthCallback = asyncHandler(async (req, res) => {
+  const user = req.user;
+  if (!user) {
+    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth?error=OAuthFailed`);
+  }
+
+  const { accessToken, refreshToken } = await generateTokensForUser(user);
+
+  res.cookie("accessToken", accessToken, COOKIE_OPTIONS);
+  res.cookie("refreshToken", refreshToken, COOKIE_OPTIONS);
+
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  return res.redirect(`${frontendUrl}/oauth-callback?token=${accessToken}`);
+});
+
+export { registerUser, loginUser, logoutUser, getCurrentUser, refreshAccessToken, oauthCallback };

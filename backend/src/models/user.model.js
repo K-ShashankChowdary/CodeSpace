@@ -24,7 +24,17 @@ const userSchema = new Schema(
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
+      required: function() {
+        return this.provider === 'local';
+      },
+    },
+    provider: {
+      type: String,
+      enum: ['local', 'google', 'github'],
+      default: 'local',
+    },
+    providerId: {
+      type: String,
     },
     refreshToken: {
       type: String,       // stores the current valid refresh token
@@ -36,7 +46,7 @@ const userSchema = new Schema(
 // auto-hash password with bcrypt before saving, only when password changes
 // Note: Mongoose 7+ async hooks use return/throw, not next()
 userSchema.pre("save", async function () {
-  if (!this.isModified("password")) return;
+  if (!this.isModified("password") || !this.password) return;
   this.password = await bcrypt.hash(this.password, 10);
 });
 
