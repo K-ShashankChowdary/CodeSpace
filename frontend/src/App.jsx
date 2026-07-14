@@ -9,6 +9,7 @@ import InterviewEnded from "./pages/InterviewEnded";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Spinner from "./components/ui/Spinner";
 import Landing from "./pages/Landing";
+import OAuthCallback from "./pages/OAuthCallback";
 import { socket } from "./utils/socket";
 
 function App() {
@@ -63,7 +64,7 @@ function App() {
   //  - protected pages (e.g. /problem/:id) → show spinner until resolved
   if (isAuthenticated === null) {
     const isLandingOrAuth =
-      location.pathname === "/" || location.pathname === "/auth";
+      location.pathname === "/" || location.pathname === "/auth" || location.pathname === "/oauth-callback";
 
     if (isLandingOrAuth) {
       // Render the page the user actually requested right away
@@ -71,6 +72,13 @@ function App() {
         return (
           <ErrorBoundary>
             <Auth />
+          </ErrorBoundary>
+        );
+      }
+      if (location.pathname === "/oauth-callback") {
+        return (
+          <ErrorBoundary>
+            <OAuthCallback />
           </ErrorBoundary>
         );
       }
@@ -103,6 +111,8 @@ function App() {
           path="/auth"
           element={!isAuthenticated ? <Auth /> : <Navigate to="/" replace />}
         />
+
+        <Route path="/oauth-callback" element={<OAuthCallback />} />
 
         {/* IDE: accessible to authenticated users and guests with a guestToken */}
         <Route
