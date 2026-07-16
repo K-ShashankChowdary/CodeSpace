@@ -38,7 +38,7 @@ class ProblemService {
 
   async importFromLeetCode(url) {
     // Basic extraction
-    const match = url.match(/problems\/([^\/]+)/);
+    const match = url.match(/problems\/([^/]+)/);
     if (!match) throw new ApiError(400, "Invalid LeetCode URL");
     
     const titleSlug = match[1];

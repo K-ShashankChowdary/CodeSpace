@@ -13,7 +13,6 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const redisUrl = process.env.REDIS_URI || "redis://localhost:6379";
-const isUpstash = redisUrl.includes("upstash.io");
 
 const redisClient = createClient({
     url: redisUrl,
@@ -44,7 +43,9 @@ const runCode = async (jobId, code, input, testIndex, language) => {
 
     try {
         await fs.promises.mkdir(jobTempDir, { recursive: true });
-    } catch {}
+    } catch (_e) {
+        // Directory may already exist
+    }
 
     let ext = ".cpp";
     if (language === "c") ext = ".c";
@@ -76,7 +77,7 @@ const runCode = async (jobId, code, input, testIndex, language) => {
             try {
                 const result = JSON.parse(stdout.trim());
                 resolve(result);
-            } catch (parseError) {
+            } catch (_parseError) {
                 resolve({ status: "IE", output: "Engine output malformed" });
             }
         });

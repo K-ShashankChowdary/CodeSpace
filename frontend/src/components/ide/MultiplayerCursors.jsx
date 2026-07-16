@@ -87,7 +87,7 @@ export default function MultiplayerCursors({ activeRoomCode, currentUser }) {
       socket.off("sync-cursor", handleSyncCursor);
       clearInterval(cleanupInterval);
     };
-  }, [activeRoomCode]);
+  }, [activeRoomCode, currentUser]);
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[100] overflow-hidden">

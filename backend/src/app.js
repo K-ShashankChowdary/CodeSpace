@@ -44,7 +44,7 @@ app.use("/api/v1/problems", problemRouter);
 app.use("/api/v1/sessions", sessionRouter);
 
 // global error handler - catches all errors thrown by controllers via asyncHandler
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
     const statusCode = err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 

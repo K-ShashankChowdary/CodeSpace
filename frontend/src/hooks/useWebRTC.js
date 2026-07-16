@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { socket } from "../../utils/socket";
+import { socket } from "../utils/socket";
 
 const STUN_SERVERS = {
   iceServers: [
@@ -125,7 +125,6 @@ export const useWebRTC = (isInterviewer) => {
         peerConnection.current = null;
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInterviewer]);
 
   const toggleMute = useCallback(() => {

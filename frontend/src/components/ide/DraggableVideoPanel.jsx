@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+// eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 import { Mic, MicOff, Video, VideoOff, X, Maximize, Minimize } from "lucide-react";
 import { useWebRTC } from "../../hooks/useWebRTC";

@@ -20,7 +20,7 @@ export const verifyJWTOrGuest = asyncHandler(async (req, _, next) => {
     let decoded;
     try {
         decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    } catch (err) {
+    } catch (_err) {
         throw new ApiError(401, "Invalid or expired token");
     }
 

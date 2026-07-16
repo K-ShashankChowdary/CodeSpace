@@ -10,10 +10,6 @@ export const initializeSockets = (httpServer) => {
   const io = new Server(httpServer, {
     cors: { origin: process.env.CORS_ORIGIN, credentials: true },
   });
-
-  const redisUrl = process.env.REDIS_URI || "redis://localhost:6379";
-  const isUpstash = redisUrl.includes("upstash.io");
-
   const subscriber = createClient({
     url: process.env.REDIS_URI || "redis://localhost:6379",
     pingInterval: 10000,
