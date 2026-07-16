@@ -56,8 +56,10 @@ FUTURE EXPLORATION (CoderPad Features)
 - [LANG-DB] Support for SQL execution against an in-memory database.
 - [FEAT-PLAYBACK] Interview Playback (Keystroke History) to replay the interview after it ends.
 - [FEAT-WHITEBOARD] Integrated Whiteboard (e.g., Excalidraw) for System Design interviews.
+- [FEAT-TIMER] Interview Timer: A shared stopwatch/timer showing elapsed time since the interview started, visible to both interviewer and candidate.
 - [FEAT-HARDMODE] "Hard Mode" toggle for interviewers to disable autocomplete/syntax highlighting.
 - [FEAT-SCORECARD] Interviewer Scorecard & Notes panel for private grading and export.
+- [FEAT-RESIZABLE-IDE] Resizable IDE Panels: Implement drag-to-resize borders for the Problem Description, Code Editor, and Console panels (similar to LeetCode) to allow users to customize their workspace layout.
 
 =============================================================
 COMPLETED ARCHIVE
@@ -93,6 +95,7 @@ COMPLETED ARCHIVE
 ✅ [BUG-20] ESLint error: `motion` imported but flagged as unused in IDE.jsx — suppressed with eslint-disable comment.
 ✅ [TEST-2] End-to-end Backend API and Execution Pipeline Automated Tests created (check_db.js, test-api.js, test-execution.js) and passing. Verified 0 backend/frontend runtime bugs or errors on app startup.
 ✅ [FEAT-7] Public Landing Page: Created high-conversion, responsive landing page (`/`) with modular components, glassmorphism design, and Framer Motion animations.
+✅ [FEAT-6.1] Production-grade WebRTC Refactor: Extracted useWebRTC custom hook, resolved camera memory leaks upon unmount, implemented graceful fallback UI for denied media permissions, and upgraded Framer Motion animations (layout-driven fullscreen toggling with micro-interactions).
 
 =============================================================
 NEW IDEAS: MOCK INTERVIEW PLATFORM RESEARCH
