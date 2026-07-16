@@ -22,8 +22,7 @@ import { useIDEState, BOILERPLATES } from "../hooks/useIDEState";
 import { useWorkspaceData } from "../hooks/useWorkspaceData";
 import { useCodeExecution } from "../hooks/useCodeExecution";
 
-// eslint-disable-next-line no-unused-vars
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { RotateCcw } from "lucide-react";
 
 function IDE() {
@@ -374,12 +373,15 @@ function IDE() {
         </div>
       </div>
       
-      {isVideoOpen && activeRoomCode && (
-        <DraggableVideoPanel
-          onClose={() => setIsVideoOpen(false)}
-          isInterviewer={isInterviewer}
-        />
-      )}
+      <AnimatePresence>
+        {isVideoOpen && activeRoomCode && (
+          <DraggableVideoPanel
+            key="video-panel"
+            onClose={() => setIsVideoOpen(false)}
+            isInterviewer={isInterviewer}
+          />
+        )}
+      </AnimatePresence>
 
       <CustomProblemModal isOpen={isCustomModalOpen} onClose={() => setIsCustomModalOpen(false)} onSubmit={handleCreateCustomProblem} />
     </>
