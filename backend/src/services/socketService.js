@@ -218,6 +218,13 @@ export const initializeSockets = (httpServer) => {
       }
     });
 
+    // WEBRTC SIGNALING
+    socket.on("webrtc-signal", (data) => {
+      if (socket.data.roomCode) {
+        socket.to(socket.data.roomCode).emit("webrtc-signal", data);
+      }
+    });
+
     // CANDIDATE LEAVING LOGIC
     socket.on("disconnect", () => {
       const { roomCode, userId, username, isInterviewer } = socket.data;

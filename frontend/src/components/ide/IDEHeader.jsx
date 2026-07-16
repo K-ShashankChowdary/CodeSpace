@@ -4,7 +4,7 @@ import Button from "../ui/Button";
 import ProblemDropdown from "../ui/ProblemDropdown";
 import { getFullStatus } from "../ui/StatusBadge";
 
-const IDEHeader = ({
+    const IDEHeader = ({
   navigate,
   onDashboardClick,
   isInterviewer,
@@ -20,6 +20,8 @@ const IDEHeader = ({
   onExitInterview,
   onLogout,
   onCopyLink,
+  isVideoOpen,
+  onToggleVideo,
 }) => {
   const getStatusTheme = (s) => {
     switch (s) {
@@ -134,6 +136,20 @@ const IDEHeader = ({
             </span>
           </div>
         </div>
+
+        {activeRoomCode && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onToggleVideo}
+            className={`flex items-center gap-2 ${isVideoOpen ? "bg-blue-500/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/30" : ""}`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            {isVideoOpen ? "Close Video" : "Start Video"}
+          </Button>
+        )}
 
         {activeRoomCode && isInterviewer && (
           <>

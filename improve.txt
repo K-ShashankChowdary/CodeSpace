@@ -17,10 +17,8 @@ To complete the MVP for the resume, the following features must be executed:
 
 [FEAT-6] Built-in Video Call
 → Problem: Requires a separate Zoom link.
-→ Architecture: Embed a Daily.co iframe into a resizable side panel next to the code editor.
-→ Status: NOT STARTED
-
-
+→ Architecture: 100% Native WebRTC P2P Video via `simple-peer`, using Socket.io for signaling and Google STUN servers for NAT traversal.
+→ Status: ✅ COMPLETED
 =============================================================
 RELIABILITY & ENGINE POLISH
 =============================================================

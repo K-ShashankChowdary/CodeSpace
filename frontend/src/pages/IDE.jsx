@@ -15,6 +15,7 @@ import IDEHeader from "../components/ide/IDEHeader";
 import ProblemPanel from "../components/ide/ProblemPanel";
 import ConsolePanel from "../components/ide/ConsolePanel";
 import LanguageDropdown from "../components/ui/LanguageDropdown";
+import DraggableVideoPanel from "../components/ide/DraggableVideoPanel";
 
 // Custom Hooks
 import { useIDEState, BOILERPLATES } from "../hooks/useIDEState";
@@ -45,6 +46,7 @@ function IDE() {
   const [history, setHistory] = useState([]);
 
   const monacoEditorRef = useRef(null);
+  const [isVideoOpen, setIsVideoOpen] = useState(false);
 
   // 1. IDE State (Tabs, Language, Code)
   const {
@@ -295,6 +297,8 @@ function IDE() {
             navigator.clipboard.writeText(`${window.location.origin}/join/${activeRoomCode}`);
             showToast("Invite link copied to clipboard!", "success");
           }}
+          isVideoOpen={isVideoOpen}
+          onToggleVideo={() => setIsVideoOpen(!isVideoOpen)}
         />
         
         <div className="flex-1 flex gap-3 p-3 overflow-hidden relative z-10">
@@ -370,6 +374,13 @@ function IDE() {
         </div>
       </div>
       
+      {isVideoOpen && activeRoomCode && (
+        <DraggableVideoPanel
+          onClose={() => setIsVideoOpen(false)}
+          isInterviewer={isInterviewer}
+        />
+      )}
+
       <CustomProblemModal isOpen={isCustomModalOpen} onClose={() => setIsCustomModalOpen(false)} onSubmit={handleCreateCustomProblem} />
     </>
   );
