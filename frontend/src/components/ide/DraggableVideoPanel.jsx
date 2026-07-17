@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 // eslint-disable-next-line no-unused-vars
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Mic, MicOff, Video, VideoOff, X, Maximize, Minimize } from "lucide-react";
 import { useWebRTC } from "../../hooks/useWebRTC";
 
@@ -19,12 +19,11 @@ function DraggableVideoPanel({ onClose, isInterviewer }) {
     error
   } = useWebRTC(isInterviewer);
 
-  // Attach streams to video elements
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
     }
-  }, [localStream]);
+  }, [localStream, isVideoOff]);
 
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
@@ -48,7 +47,11 @@ function DraggableVideoPanel({ onClose, isInterviewer }) {
       dragConstraints={{ left: -1000, right: 0, top: -100, bottom: 600 }}
       dragMomentum={false}
       initial={{ opacity: 0, scale: 0.8, y: 20 }}
-      animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
+      animate={
+        isFullscreen
+          ? { opacity: 1, scale: 1, x: 0, y: 0 }
+          : { opacity: 1, scale: 1 }
+      }
       exit={{ opacity: 0, scale: 0.8, y: 20 }}
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
       className={`z-[100] bg-[#0a0a0a] border border-zinc-800 flex flex-col ${
@@ -93,18 +96,25 @@ function DraggableVideoPanel({ onClose, isInterviewer }) {
             />
 
             {/* Local Video (Self) */}
-            <motion.div 
-              layout
-              className="absolute bottom-3 right-3 w-24 h-32 shadow-xl border-2 border-zinc-800 rounded-lg overflow-hidden bg-black z-10 shrink-0"
-            >
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover transform -scale-x-100" 
-              />
-            </motion.div>
+            <AnimatePresence>
+              {!isVideoOff && (
+                <motion.div 
+                  layout
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="absolute bottom-3 right-3 w-24 h-32 shadow-xl border-2 border-zinc-800 rounded-lg overflow-hidden bg-black z-10 shrink-0"
+                >
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover transform -scale-x-100" 
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
       </div>
