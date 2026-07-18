@@ -26,6 +26,7 @@ import { useCodeExecution } from "../hooks/useCodeExecution";
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
 import { RotateCcw } from "lucide-react";
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 
 function IDE() {
   const { id } = useParams();
@@ -279,76 +280,94 @@ function IDE() {
           onToggleVideo={() => setIsVideoOpen(!isVideoOpen)}
         />
         
-        <div className="flex-1 flex gap-3 p-3 overflow-hidden relative z-10">
-          <ProblemPanel
-            problem={problem}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            history={history}
-            handleRestoreCode={(submissionCode) => {
-              if (submissionCode) {
-                if (monacoEditorRef.current) monacoEditorRef.current.setValue(submissionCode);
-                else setCode(submissionCode);
-                setActiveTab("description");
-              }
-            }}
-          />
+        <div className="flex-1 flex p-3 overflow-hidden relative z-10">
+          <PanelGroup orientation="horizontal">
+            <Panel defaultSize={40} minSize={25} className="flex flex-col">
+              <ProblemPanel
+                problem={problem}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                history={history}
+                handleRestoreCode={(submissionCode) => {
+                  if (submissionCode) {
+                    if (monacoEditorRef.current) monacoEditorRef.current.setValue(submissionCode);
+                    else setCode(submissionCode);
+                    setActiveTab("description");
+                  }
+                }}
+              />
+            </Panel>
 
-          <div className="w-7/12 flex flex-col gap-3 min-h-0">
-            <div className="flex-1 glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden min-h-0">
-              <div className="bg-black/40 backdrop-blur-md px-6 py-4 flex justify-between items-center border-b border-white/[0.05] shrink-0 z-20">
-                <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest glow-cyan drop-shadow-md">
-                  {language === "cpp" ? "main.cpp" : language === "c" ? "main.c" : language === "python" ? "main.py" : language === "java" ? "Main.java" : "index.js"}
-                </span>
-                <div className="flex items-center gap-4">
-                  <button onClick={() => setShowResetModal(true)} className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400 hover:text-white transition-colors duration-200">
-                    <RotateCcw size={14} /><span>Reset</span>
-                  </button>
-                  <LanguageDropdown 
-                    language={language}
-                    onChange={(lang) => {
-                      setLanguage(lang);
-                      if (activeRoomCode) {
-                        socket.emit("sync-language", { roomCode: activeRoomCode, language: lang });
-                      }
-                      const codeToSet = localStorage.getItem(`codespace-${id}-${lang}`) || problem?.boilerplate?.[{ cpp: "C++ 17", c: "C", python: "Python 3", java: "Java", javascript: "JavaScript" }[lang]] || BOILERPLATES[lang];
-                      if (monacoEditorRef.current) {
-                        monacoEditorRef.current.setValue(codeToSet);
-                        setCursorToBoilerplate(monacoEditorRef.current);
-                      } else {
-                        setCode(codeToSet);
-                      }
+            <PanelResizeHandle className="w-3 cursor-col-resize flex justify-center items-center group">
+              <div className="w-1 h-8 bg-white/10 rounded-full group-hover:bg-white/30 transition-colors" />
+            </PanelResizeHandle>
+
+            <Panel defaultSize={60} minSize={30} className="flex flex-col">
+              <PanelGroup orientation="vertical">
+                <Panel defaultSize={65} minSize={20} className="flex flex-col">
+                  <div className="w-full h-full glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden min-h-0">
+                    <div className="bg-black/40 backdrop-blur-md px-6 py-4 flex justify-between items-center border-b border-white/[0.05] shrink-0 z-20">
+                      <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest glow-cyan drop-shadow-md">
+                        {language === "cpp" ? "main.cpp" : language === "c" ? "main.c" : language === "python" ? "main.py" : language === "java" ? "Main.java" : "index.js"}
+                      </span>
+                      <div className="flex items-center gap-4">
+                        <button onClick={() => setShowResetModal(true)} className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400 hover:text-white transition-colors duration-200">
+                          <RotateCcw size={14} /><span>Reset</span>
+                        </button>
+                        <LanguageDropdown 
+                          language={language}
+                          onChange={(lang) => {
+                            setLanguage(lang);
+                            if (activeRoomCode) {
+                              socket.emit("sync-language", { roomCode: activeRoomCode, language: lang });
+                            }
+                            const codeToSet = localStorage.getItem(`codespace-${id}-${lang}`) || problem?.boilerplate?.[{ cpp: "C++ 17", c: "C", python: "Python 3", java: "Java", javascript: "JavaScript" }[lang]] || BOILERPLATES[lang];
+                            if (monacoEditorRef.current) {
+                              monacoEditorRef.current.setValue(codeToSet);
+                              setCursorToBoilerplate(monacoEditorRef.current);
+                            } else {
+                              setCode(codeToSet);
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-1 relative bg-black/20 overflow-hidden">
+                      <CodeEditor 
+                        key={id}
+                        code={code} 
+                        setCode={setCode} 
+                        language={language} 
+                        roomCode={activeRoomCode ? `${activeRoomCode}-${id}` : null}
+                        currentUser={currentUser}
+                        isInterviewer={isInterviewer}
+                        onMount={(editor) => { monacoEditorRef.current = editor; setCursorToBoilerplate(editor); }}
+                      />
+                    </div>
+                  </div>
+                </Panel>
+
+                <PanelResizeHandle className="h-3 cursor-row-resize flex justify-center items-center group">
+                  <div className="h-1 w-8 bg-white/10 rounded-full group-hover:bg-white/30 transition-colors" />
+                </PanelResizeHandle>
+
+                <Panel defaultSize={35} minSize={20} className="flex flex-col">
+                  <ConsolePanel
+                    output={output}
+                    status={status}
+                    activeTestCase={activeTestCase}
+                    setActiveTestCase={setActiveTestCase}
+                    isRunning={isRunning}
+                    isSubmitting={isSubmitting}
+                    handleExecution={(type) => {
+                      const currentCode = monacoEditorRef.current ? monacoEditorRef.current.getValue() : code;
+                      handleExecution(type, currentCode, language);
                     }}
                   />
-                </div>
-              </div>
-              <div className="flex-1 relative bg-black/20 overflow-hidden">
-                <CodeEditor 
-                  key={id}
-                  code={code} 
-                  setCode={setCode} 
-                  language={language} 
-                  roomCode={activeRoomCode ? `${activeRoomCode}-${id}` : null}
-                  currentUser={currentUser}
-                  isInterviewer={isInterviewer}
-                  onMount={(editor) => { monacoEditorRef.current = editor; setCursorToBoilerplate(editor); }}
-                />
-              </div>
-            </div>
-
-            <ConsolePanel
-              output={output}
-              status={status}
-              activeTestCase={activeTestCase}
-              setActiveTestCase={setActiveTestCase}
-              isRunning={isRunning}
-              isSubmitting={isSubmitting}
-              handleExecution={(type) => {
-                const currentCode = monacoEditorRef.current ? monacoEditorRef.current.getValue() : code;
-                handleExecution(type, currentCode, language);
-              }}
-            />
-          </div>
+                </Panel>
+              </PanelGroup>
+            </Panel>
+          </PanelGroup>
         </div>
       </div>
       

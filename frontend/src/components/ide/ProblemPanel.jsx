@@ -11,7 +11,7 @@ const ProblemPanel = ({
   handleRestoreCode,
 }) => {
   return (
-    <div className="w-5/12 glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden min-h-0">
+    <div className="w-full h-full glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden min-h-0">
       <div className="flex bg-black/40 backdrop-blur-md border-b border-white/[0.05] shrink-0 relative">
         {["description", "submissions"].map((tab) => (
           <button
@@ -33,7 +33,7 @@ const ProblemPanel = ({
       <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
         {activeTab === "description" ? (
           <div className="animate-in fade-in duration-300">
-            <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap mb-10">
+            <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap break-words mb-10">
               {problem?.description || "No description available."}
             </p>
             <div className="space-y-10">

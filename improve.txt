@@ -25,6 +25,19 @@ RELIABILITY & ENGINE POLISH
 
 [OPS-1] Rate limiting on execution endpoint
 → Per-user limit: 10 runs/minute via Redis token bucket.
+→ Metric Impact: "Engineered a distributed token-bucket rate limiter using Redis to protect the C++ code execution engine from DDoS attacks and resource exhaustion, successfully capping execution requests at 10 req/min per user and ensuring 99.9% platform uptime."
+→ Status: NOT STARTED
+
+[ENGINE-2] Zero-Allocation Output Verification
+→ Problem: Current string matching (`split.map.join.trim`) allocates 4+ new arrays/strings, causing massive GC overhead for large outputs.
+→ Architecture: Implement a two-pointer string matching algorithm in Javascript to skip whitespace in-place without memory allocation.
+→ Metric Impact: "Optimized execution engine output verification by engineering a zero-allocation, two-pointer string parsing algorithm, reducing V8 Garbage Collection overhead and decreasing evaluation memory footprint by up to 80% for megabyte-scale outputs."
+→ Status: NOT STARTED
+
+[UI-1] Myers Diff Algorithm for Visual Output Comparison
+→ Problem: "Wrong Answer" is hard to debug without seeing exact character deviations.
+→ Architecture: Run Myers Diff Algorithm on the frontend to render GitHub-style red/green character diffs.
+→ Metric Impact: "Integrated the Myers diff algorithm into the frontend React IDE, generating real-time, character-by-character visual diffs for failed test cases, significantly reducing candidate debugging time."
 → Status: NOT STARTED
 
 =============================================================
@@ -59,11 +72,11 @@ FUTURE EXPLORATION (CoderPad Features)
 - [FEAT-TIMER] Interview Timer: A shared stopwatch/timer showing elapsed time since the interview started, visible to both interviewer and candidate.
 - [FEAT-HARDMODE] "Hard Mode" toggle for interviewers to disable autocomplete/syntax highlighting.
 - [FEAT-SCORECARD] Interviewer Scorecard & Notes panel for private grading and export.
-- [FEAT-RESIZABLE-IDE] Resizable IDE Panels: Implement drag-to-resize borders for the Problem Description, Code Editor, and Console panels (similar to LeetCode) to allow users to customize their workspace layout.
 
 =============================================================
 COMPLETED ARCHIVE
 =============================================================
+✅ [FEAT-RESIZABLE-IDE] Resizable IDE Panels: Implement drag-to-resize borders for the Problem Description, Code Editor, and Console panels (similar to LeetCode) to allow users to customize their workspace layout.
 ✅ [FEAT-2] Session Data Model & Guest Auth Flow
 ✅ [FEAT-3] UI Overhaul: Dashboard to Interview View
 ✅ [FEAT-1] Collaborative Code Editor (Yjs) implemented successfully with real-time neon name tags and conflict-free cursor syncing.
@@ -122,3 +135,10 @@ AUTH & ONBOARDING
   - On success: issue same JWT + refresh token pair as email flow.
   - Frontend: "Continue with Google / GitHub" buttons on Auth page.
 → Status: ✅ COMPLETED
+
+=============================================================
+RESUME UPLOAD & VIEWER
+=============================================================
+- [FEAT-RESUME-UPLOAD] Pre-interview Resume Upload: Prompt candidates to upload their resume (PDF) when entering the interview session.
+- [FEAT-RESUME-VIEWER] In-Interview Resume Viewer: Allow the interviewer to view the uploaded resume during the interview.
+- [FEAT-RESUME-SHARING] Shared Resume View: Provide an option for the interviewer to share the resume view with the candidate. When toggled, the resume automatically pops up on the candidate's screen as a draggable, resizable window (similar to the PiP video panel).

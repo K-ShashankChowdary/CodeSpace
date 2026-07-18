@@ -231,7 +231,7 @@ const ConsolePanel = ({
   };
 
   return (
-    <div className="h-[55%] glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden shrink-0">
+    <div className="w-full h-full glass-card rounded-2xl flex flex-col border border-white/[0.05] shadow-2xl overflow-hidden shrink-0">
       <div className="bg-black/40 backdrop-blur-md px-6 py-4 border-b border-white/[0.05] shrink-0">
         <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest glow-purple drop-shadow-md">
           Console Output
