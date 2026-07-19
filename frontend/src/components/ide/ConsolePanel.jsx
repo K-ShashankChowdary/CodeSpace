@@ -5,6 +5,52 @@ import Button from "../ui/Button";
 import { Play, Send, Loader2, Rocket } from "lucide-react";
 import TerminalLoader from "../ui/TerminalLoader";
 import { getFullStatus } from "../ui/StatusBadge";
+import OutputDiffViewer from "./OutputDiffViewer";
+
+const getStatusTheme = (status) => {
+  switch (status) {
+    case "AC":
+      return {
+        text: "text-green-500 drop-shadow-[0_0_12px_rgba(34,197,94,0.4)]",
+        dot: "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]",
+        box: "bg-green-500/10 text-green-300 border border-green-500/20 shadow-[inset_0_0_20px_rgba(34,197,94,0.05)]",
+      };
+    case "TLE":
+      return {
+        text: "text-orange-500 drop-shadow-[0_0_12px_rgba(249,115,22,0.4)]",
+        dot: "bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]",
+        box: "bg-orange-500/10 text-orange-300 border border-orange-500/20 shadow-[inset_0_0_20px_rgba(249,115,22,0.05)]",
+      };
+    case "CE":
+      return {
+        text: "text-yellow-500 drop-shadow-[0_0_12px_rgba(234,179,8,0.4)]",
+        dot: "bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]",
+        box: "bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 shadow-[inset_0_0_20px_rgba(234,179,8,0.05)]",
+      };
+    case "MLE":
+      return {
+        text: "text-purple-500 drop-shadow-[0_0_12px_rgba(168,85,247,0.4)]",
+        dot: "bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)]",
+        box: "bg-purple-500/10 text-purple-300 border border-purple-500/20 shadow-[inset_0_0_20px_rgba(168,85,247,0.05)]",
+      };
+    case "RE":
+    case "RE (SIGSEGV)":
+    case "RE (SIGABRT)":
+    case "RE (SIGFPE)":
+      return {
+        text: "text-pink-500 drop-shadow-[0_0_12px_rgba(236,72,153,0.4)]",
+        dot: "bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.6)]",
+        box: "bg-pink-500/10 text-pink-300 border border-pink-500/20 shadow-[inset_0_0_20px_rgba(236,72,153,0.05)]",
+      };
+    case "WA":
+    default:
+      return {
+        text: "text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.4)]",
+        dot: "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]",
+        box: "bg-red-500/10 text-red-300 border border-red-500/20 shadow-[inset_0_0_20px_rgba(239,68,68,0.05)]",
+      };
+  }
+};
 
 const ConsolePanel = ({
   output,
@@ -43,50 +89,6 @@ const ConsolePanel = ({
         // Ignore JSON parse errors
       }
     }
-    const getStatusTheme = (status) => {
-      switch (status) {
-        case "AC":
-          return {
-            text: "text-green-500 drop-shadow-[0_0_12px_rgba(34,197,94,0.4)]",
-            dot: "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]",
-            box: "bg-green-500/10 text-green-300 border border-green-500/20 shadow-[inset_0_0_20px_rgba(34,197,94,0.05)]",
-          };
-        case "TLE":
-          return {
-            text: "text-orange-500 drop-shadow-[0_0_12px_rgba(249,115,22,0.4)]",
-            dot: "bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]",
-            box: "bg-orange-500/10 text-orange-300 border border-orange-500/20 shadow-[inset_0_0_20px_rgba(249,115,22,0.05)]",
-          };
-        case "CE":
-          return {
-            text: "text-yellow-500 drop-shadow-[0_0_12px_rgba(234,179,8,0.4)]",
-            dot: "bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]",
-            box: "bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 shadow-[inset_0_0_20px_rgba(234,179,8,0.05)]",
-          };
-        case "MLE":
-          return {
-            text: "text-purple-500 drop-shadow-[0_0_12px_rgba(168,85,247,0.4)]",
-            dot: "bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)]",
-            box: "bg-purple-500/10 text-purple-300 border border-purple-500/20 shadow-[inset_0_0_20px_rgba(168,85,247,0.05)]",
-          };
-        case "RE":
-        case "RE (SIGSEGV)":
-        case "RE (SIGABRT)":
-        case "RE (SIGFPE)":
-          return {
-            text: "text-pink-500 drop-shadow-[0_0_12px_rgba(236,72,153,0.4)]",
-            dot: "bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.6)]",
-            box: "bg-pink-500/10 text-pink-300 border border-pink-500/20 shadow-[inset_0_0_20px_rgba(236,72,153,0.05)]",
-          };
-        case "WA":
-        default:
-          return {
-            text: "text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.4)]",
-            dot: "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]",
-            box: "bg-red-500/10 text-red-300 border border-red-500/20 shadow-[inset_0_0_20px_rgba(239,68,68,0.05)]",
-          };
-      }
-    };
 
     if (parsedResults && Array.isArray(parsedResults) && parsedResults.length > 0) {
       const activeRes = parsedResults[activeTestCase] || parsedResults[0] || {};
@@ -179,7 +181,13 @@ const ConsolePanel = ({
                       : "bg-white/[0.02] text-zinc-300 border border-white/[0.05] shadow-[inset_0_0_20px_rgba(255,255,255,0.01)]"
                   }`}
                 >
-                  {section.value || "N/A"}
+                  {(() => {
+                    if (!section.value && section.value !== "") return "N/A";
+                    if (section.isOutput && section.status === "WA" && activeRes?.expected !== undefined) {
+                      return <OutputDiffViewer actual={section.value} expected={activeRes.expected} />;
+                    }
+                    return section.value;
+                  })()}
                 </div>
               </motion.div>
             ))}
