@@ -28,12 +28,6 @@ RELIABILITY & ENGINE POLISH
 → Metric Impact: "Engineered a distributed token-bucket rate limiter using Redis to protect the C++ code execution engine from DDoS attacks and resource exhaustion, successfully capping execution requests at 10 req/min per user and ensuring 99.9% platform uptime."
 → Status: NOT STARTED
 
-[ENGINE-2] Zero-Allocation Output Verification
-→ Problem: Current string matching (`split.map.join.trim`) allocates 4+ new arrays/strings, causing massive GC overhead for large outputs.
-→ Architecture: Implement a two-pointer string matching algorithm in Javascript to skip whitespace in-place without memory allocation.
-→ Metric Impact: "Optimized execution engine output verification by engineering a zero-allocation, two-pointer string parsing algorithm, reducing V8 Garbage Collection overhead and decreasing evaluation memory footprint by up to 80% for megabyte-scale outputs."
-→ Status: NOT STARTED
-
 =============================================================
 DOCUMENTATION
 =============================================================
@@ -70,6 +64,7 @@ FUTURE EXPLORATION (CoderPad Features)
 =============================================================
 COMPLETED ARCHIVE
 =============================================================
+✅ [ENGINE-2] Zero-Allocation Output Verification: Implemented a two-pointer string matching algorithm in Javascript to skip whitespace in-place without memory allocation.
 ✅ [UI-1] Myers Diff Algorithm for Visual Output Comparison: Integrated the diff algorithm to render LeetCode-style character diffs for failed test cases in the frontend IDE.
 ✅ [FEAT-RESIZABLE-IDE] Resizable IDE Panels: Implement drag-to-resize borders for the Problem Description, Code Editor, and Console panels (similar to LeetCode) to allow users to customize their workspace layout.
 ✅ [FEAT-2] Session Data Model & Guest Auth Flow
