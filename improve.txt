@@ -28,6 +28,30 @@ RELIABILITY & ENGINE POLISH
 → Metric Impact: "Engineered a distributed token-bucket rate limiter using Redis to protect the C++ code execution engine from DDoS attacks and resource exhaustion, successfully capping execution requests at 10 req/min per user and ensuring 99.9% platform uptime."
 → Status: NOT STARTED
 
+[OPS-2] Benchmarking & Monitoring CLI Module
+→ Problem: Hard to measure exactly how much time/memory our engine optimizations save.
+→ Architecture: Separate runner/workload architecture (Google/Atlassian style) tracking Peak Heap, CPU Time, and P99 Latency. Generates markdown reports.
+→ Metric Impact: "Architected a FAANG-grade benchmarking CLI that isolates workloads to measure P99 latency and Node.js GC overhead, providing hard data for performance regressions."
+→ Status: IN PROGRESS
+
+[ENGINE-3] Compile-Once, Run-Many Architecture
+→ Problem: `jobworker.js` spins up a new Docker container and triggers a full `g++`/`javac` compilation for EVERY test case, crippling CPU. Benchmark (`05_sequential_execution.js`) shows this takes 4.65 seconds for just 10 C++ test cases.
+→ Architecture: Separate compilation and execution phases. Compile binary once, mount it, and run against N test cases.
+→ Metric Impact: "Eliminated redundant Docker compilation cycles by engineering a compile-once-run-many architecture, reducing multi-testcase execution latency from 4.6s to under 1s."
+→ Status: NOT STARTED
+
+[ENGINE-4] Zero-Copy Redis Payload Serialization
+→ Problem: `jobworker.js` bundles huge `input` and `expected` strings into the final JSON payload and sends it over Redis. Benchmark (`02_redis_serialization.js`) shows this triggers a +40.8MB GC memory spike and blocks the event loop for ~92ms for large IO payloads.
+→ Architecture: Strip input/expected from the worker payload and let the frontend zip the `actual/status` response with local state.
+→ Metric Impact: "Drastically reduced backend memory allocation by 40MB per execution and reduced Redis pub/sub bandwidth by omitting static test case data from execution payloads."
+→ Status: NOT STARTED
+
+[ENGINE-5] Batch Container Execution
+→ Problem: Docker spin-up adds ~770ms per test case (`03_engine_execution.js`). Sequential execution wastes resources.
+→ Architecture: Spin up Docker once, feed it an array of inputs via standard I/O streams, and get an array of outputs back.
+→ Metric Impact: "Bypassed repetitive Docker lifecycle overhead by implementing batched execution processing, improving total evaluation throughput by 300%."
+→ Status: NOT STARTED
+
 =============================================================
 DOCUMENTATION
 =============================================================
