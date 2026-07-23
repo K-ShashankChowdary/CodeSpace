@@ -90,7 +90,12 @@ Used to enqueue a compilation job.
   "problemId": "60d5ecb8b3112a00155b4124"
 }
 // Response (202 Accepted)
-{ "jobId": "uuid-v4", "status": "QUEUED" }
+{
+  "statusCode": 202,
+  "data": { "jobId": "uuid-v4" },
+  "message": "Submission queued",
+  "success": true
+}
 ```
 
 ### 2. Real-Time Verdicts (WebSocket)
@@ -116,10 +121,15 @@ Used if WebSockets drop or are blocked by corporate proxies.
 ```json
 // Response (200 OK)
 {
-  "status": "COMPLETED",
-  "verdict": "WA",
-  "passedCases": 8,
-  "totalCases": 10
+  "statusCode": 200,
+  "data": {
+    "status": "COMPLETED",
+    "verdict": "WA",
+    "passedCases": 8,
+    "totalCases": 10
+  },
+  "message": "Status fetched",
+  "success": true
 }
 ```
 
@@ -135,9 +145,19 @@ Dynamically parses LeetCode problems directly into the database.
 }
 // Response (201 Created)
 {
-  "title": "Two Sum",
-  "difficulty": "Easy",
-  "testCases": [...]
+  "statusCode": 201,
+  "data": {
+    "title": "Two Sum",
+    "difficulty": "Easy",
+    "testCases": [
+      {
+        "input": "[2,7,11,15]\n9",
+        "output": "[0,1]"
+      }
+    ]
+  },
+  "message": "Problem imported successfully",
+  "success": true
 }
 ```
 
@@ -166,6 +186,23 @@ CodeSpace is built to avoid main-thread blocking by strictly decoupling API inge
 
 ---
 
+
+### Low-Level Design (Core Engine Internals)
+
+To achieve sub-second execution times across 10+ hidden test cases, the C++ execution engine is structured around a **Compile-Once, Run-Many** batching pattern utilizing Docker and bash orchestration.
+
+1. **Phase 1: Script Generation (Orchestration)**
+   - The C++ worker dynamically generates a `run_all.sh` bash script containing the exact compilation commands (e.g., `g++`) and a loop to sequentially run the executable against all test case inputs.
+2. **Phase 2: Sandboxing (Process Execution)**
+   - Instead of booting a fresh Docker container per test case (which incurs a ~300ms boot penalty each time), the engine uses `popen()` to boot a *single* long-lived Docker container for the entire job.
+3. **Phase 3: Resource Limiting (Kernel Bounds)**
+   - Linux `cgroups` enforce strict hardware boundaries via Docker flags (`--cpus="0.5" --memory="256m" --pids-limit=64`).
+   - The `run_all.sh` script wraps the binary execution in the Linux `timeout` utility to enforce a strict hard-cap on CPU time, gracefully terminating infinite loops (`while(true)`).
+4. **Phase 4: Batched Evaluation (I/O Redirection)**
+   - Inside the container, the bash script uses standard Linux I/O redirection (`< input.txt > output.txt`) to pipe test cases in and out.
+   - Exit codes and execution times are appended to a `metadata.txt` file, which the parent C++ process safely parses to determine verdicts (e.g., exit code `139` maps to a `SIGSEGV` Runtime Error, `124` maps to Time Limit Exceeded).
+
+---
 ## Architectural Decisions
 
 CodeSpace is engineered to mitigate the inherent security and scalability risks of online code execution at scale by treating the execution environment as entirely untrusted.
