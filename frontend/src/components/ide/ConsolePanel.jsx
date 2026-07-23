@@ -55,6 +55,7 @@ const getStatusTheme = (status) => {
 const ConsolePanel = ({
   output,
   status,
+  testCases,
   activeTestCase,
   setActiveTestCase,
   isRunning,
@@ -91,7 +92,21 @@ const ConsolePanel = ({
     }
 
     if (parsedResults && Array.isArray(parsedResults) && parsedResults.length > 0) {
-      const activeRes = parsedResults[activeTestCase] || parsedResults[0] || {};
+      let activeRes = parsedResults[activeTestCase] || parsedResults[0] || {};
+      
+      // Zero-Copy Re-hydration: We inject input/expected from the local testCases array
+      // since the backend no longer sends them over WebSockets to save memory.
+      if (testCases && testCases.length > 0) {
+        const tc = testCases[activeTestCase] || testCases[0];
+        if (tc) {
+          activeRes = {
+            ...activeRes,
+            input: tc.input,
+            expected: tc.output
+          };
+        }
+      }
+
       const overallStatus = parsedResults.every((r) => r?.status === "AC")
         ? "AC"
         : parsedResults.find((r) => r?.status !== "AC")?.status || "WA";

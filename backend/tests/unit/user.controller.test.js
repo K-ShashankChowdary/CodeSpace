@@ -20,6 +20,10 @@ describe('User Controller Tests', () => {
             clearCookie: jest.fn().mockReturnThis(),
             redirect: jest.fn()
         };
+        
+        process.env.ACCESS_TOKEN_SECRET = "test-access-secret";
+        process.env.REFRESH_TOKEN_SECRET = "test-refresh-secret";
+        
         jest.clearAllMocks();
     });
 

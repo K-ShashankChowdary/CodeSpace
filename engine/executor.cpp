@@ -7,6 +7,8 @@
 #include <sys/wait.h>
 #include <csignal>
 #include <vector>
+#include <fstream>
+#include <sstream>
 
 namespace fs = std::filesystem;
 using namespace std;
@@ -60,9 +62,9 @@ int main(int argc, char *argv[])
     signal(SIGINT, cleanup);
     signal(SIGTERM, cleanup);
 
-    if (argc < 4)
+    if (argc < 5)
     {
-        cout << "{\"status\":\"IE\",\"output\":\"INTERNAL: Missing Job ID, Temp Path, or Language\"}" << endl;
+        cout << "{\"status\":\"IE\",\"output\":\"INTERNAL: Missing Job ID, Temp Path, Language, or NumTestCases\"}" << endl;
         return 1;
     }
 
@@ -71,6 +73,7 @@ int main(int argc, char *argv[])
         string jobId = argv[1];   // MongoDB submission _id
         string pathArg = argv[2]; // absolute path to temp dir with files
         string language = argv[3]; // The programming language string
+        int numTestCases = stoi(argv[4]); // Number of test cases
 
         fs::path tempDir(pathArg);
         
@@ -120,21 +123,34 @@ int main(int argc, char *argv[])
             runBinaryCmd = "java -XX:+TieredCompilation -XX:TieredStopAtLevel=1 Main";
         }
 
+        
         // --- The Execution Command ---
-        string dockerRunCmd = "( start=$(date +%s%N); " + runBinaryCmd;
-        if (fs::exists(inputPath))
-        {
-            dockerRunCmd += " < input.txt";
-        }
-        // compute in milliseconds using nanoseconds scaled down
-        dockerRunCmd += "; exit_code=$?; end=$(date +%s%N); echo $(((end - start) / 1000000)) > " + timeFileName + "; exit $exit_code; )";
-
-        string innerCmd = "";
+        string runAllScript = tempDir.string() + "/run_all.sh";
+        ofstream scriptFile(runAllScript);
+        scriptFile << "#!/bin/bash\n";
+        
         if (compileCmd != "") {
-            innerCmd = compileCmd + " && " + dockerRunCmd;
-        } else {
-            innerCmd = dockerRunCmd;
+            scriptFile << compileCmd << " > compile_out.txt 2>&1\n";
+            scriptFile << "if [ $? -ne 0 ]; then\n";
+            scriptFile << "  echo \"CE\" > metadata.txt\n";
+            scriptFile << "  exit 2\n";
+            scriptFile << "fi\n";
         }
+        
+        scriptFile << "for i in $(seq 0 $((" << numTestCases << " - 1))); do\n";
+        scriptFile << "  start=$(date +%s%N)\n";
+        scriptFile << "  timeout 2s " << runBinaryCmd << " < input_${i}.txt > output_${i}.txt 2> err_${i}.txt\n";
+        scriptFile << "  exit_code=$?\n";
+        scriptFile << "  end=$(date +%s%N)\n";
+        scriptFile << "  time_ms=$(((end - start) / 1000000))\n";
+        scriptFile << "  echo \"$exit_code $time_ms\" >> metadata.txt\n";
+        scriptFile << "  if [ $exit_code -ne 0 ]; then\n";
+        scriptFile << "    break\n";
+        scriptFile << "  fi\n";
+        scriptFile << "done\n";
+        scriptFile.close();
+
+        string innerCmd = "bash run_all.sh";
 
         // build the docker run command with all security flags
         string cmd = timeoutCmd + " -k 1s " + TIME_LIMIT + " docker run --rm --init " +
@@ -151,132 +167,128 @@ int main(int argc, char *argv[])
         if (!current_pipe)
             throw runtime_error("Pipe failed");
 
-        // Read the output (stdout + stderr), capping at MAX_OUTPUT_SIZE to prevent buffer overflows
-        string raw_out;
+        // Read docker output (for internal errors)
+        string docker_out;
         array<char, 128> buf;
         while (fgets(buf.data(), buf.size(), current_pipe))
         {
-            if (raw_out.size() < MAX_OUTPUT_SIZE)
-                raw_out += buf.data();
+            if (docker_out.size() < MAX_OUTPUT_SIZE)
+                docker_out += buf.data();
         }
 
         int pclose_status = pclose(current_pipe);
         current_pipe = nullptr;
-
         int exit_code = WEXITSTATUS(pclose_status);
 
-        // End wall-clock timer (used as a fallback if internal timing fails)
+        // End wall-clock timer (used as a fallback)
         auto end = high_resolution_clock::now();
         long duration = duration_cast<milliseconds>(end - start).count();
 
-        // --- Extract Internal Execution Time ---
-        long exec_duration = duration; // Default to wall-clock time
-        fs::path timeFile = tempDir / timeFileName;
-        if (fs::exists(timeFile))
+        // Read metadata
+        vector<string> metadata_lines;
+        fs::path metaFile = tempDir / "metadata.txt";
+        if (fs::exists(metaFile))
         {
-            FILE *tf = fopen(timeFile.c_str(), "r");
-            if (tf)
-            {
-                long fetched_time = 0;
-                if (fscanf(tf, "%ld", &fetched_time) == 1)
-                {
-                    exec_duration = fetched_time; // Overwrite with precise internal time
+            ifstream mf(metaFile);
+            string line;
+            while (getline(mf, line)) {
+                if (line.size() > 0) metadata_lines.push_back(line);
+            }
+        }
+
+        cout << "[";
+
+        if (metadata_lines.size() > 0 && metadata_lines[0] == "CE") {
+            string comp_out = "";
+            fs::path coFile = tempDir / "compile_out.txt";
+            if (fs::exists(coFile)) {
+                ifstream cof(coFile);
+                ostringstream ss;
+                ss << cof.rdbuf();
+                comp_out = ss.str();
+            }
+            if (comp_out.length() > MAX_OUTPUT_SIZE) {
+                comp_out = comp_out.substr(0, MAX_OUTPUT_SIZE) + "\n...[Truncated]";
+            }
+            cout << "{\"status\":\"CE\",\"time_ms\":0,\"output\":\"" << json_escape(comp_out) << "\"}";
+        } else {
+            bool first = true;
+            for (int i = 0; i < numTestCases; i++) {
+                int inner_exit = 0;
+                long inner_time = 0;
+                
+                if (i < metadata_lines.size()) {
+                    sscanf(metadata_lines[i].c_str(), "%d %ld", &inner_exit, &inner_time);
+                } else if (i == metadata_lines.size()) {
+                    // This testcase didn't finish because docker was killed (OOM/TLE)
+                    inner_exit = exit_code; // 137 or 124
+                    inner_time = duration;
+                } else {
+                    // Didn't even start this testcase
+                    break;
                 }
-                fclose(tf);
-            }
-            fs::remove(timeFile); // Cleanup the time file
-        }
 
-        // Cleanup the compiled binary
-        fs::path exeFile = tempDir / exeName;
-        if (fs::exists(exeFile))
-        {
-            fs::remove(exeFile);
-        }
+                // Read output
+                string raw_out = "";
+                fs::path outFile = tempDir / ("output_" + to_string(i) + ".txt");
+                fs::path errFile = tempDir / ("err_" + to_string(i) + ".txt");
+                
+                if (fs::exists(outFile)) {
+                    ifstream of(outFile);
+                    ostringstream ss;
+                    ss << of.rdbuf();
+                    raw_out += ss.str();
+                }
+                if (fs::exists(errFile)) {
+                    ifstream ef(errFile);
+                    ostringstream ss;
+                    ss << ef.rdbuf();
+                    raw_out += ss.str();
+                }
+                if (raw_out == "") {
+                    raw_out = docker_out;
+                }
+                
+                if (raw_out.length() > MAX_OUTPUT_SIZE) {
+                    raw_out = raw_out.substr(0, MAX_OUTPUT_SIZE) + "\n...[Truncated]";
+                }
 
-        // --- Verdict Evaluation Logic ---
-        string status = "AC"; // Assume Accepted initially
-
-        if (exit_code == 124)
-        {
-            // gtimeout/timeout killed the docker run command
-            status = "TLE";
-        }
-        else if (exit_code == 137)
-        {
-            // SIGKILL (137) is issued by Docker's OOM killer
-            // If it died super fast, it was an OOM (MLE). If it died near the time limit, it was a TLE.
-            if (duration < THRESHOLD_MS)
-                status = "MLE";
-            else
-                status = "TLE";
-        }
-        else if (exit_code != 0)
-        {
-            // The program (or compiler) exited with an error
-
-            // 1. Check for Internal Engine/Docker Errors
-            if (exit_code == 125 || 
-                raw_out.find("failed to connect to the docker API") != string::npos ||
-                raw_out.find("Cannot connect to the Docker daemon") != string::npos)
-            {
-                status = "IE";
-                exec_duration = 0;
-            }
-            // 2. Check for Compilation Error
-            else if (raw_out.find("error:") != string::npos || 
-                raw_out.find("fatal error:") != string::npos || 
-                raw_out.find("SyntaxError") != string::npos || 
-                raw_out.find("IndentationError") != string::npos || 
-                raw_out.find("TabError") != string::npos)
-            {
-                status = "CE";
-                exec_duration = 0; // FIX: Prevent massive junk numbers because the binary never ran
-            }
-            // 2. Check for Memory Limit Exceeded across languages (e.g., massive allocations before Docker OOM)
-            else if (raw_out.find("std::bad_alloc") != string::npos ||
-                     raw_out.find("java.lang.OutOfMemoryError") != string::npos ||
-                     raw_out.find("MemoryError") != string::npos ||
-                     raw_out.find("heap out of memory") != string::npos)
-            {
-                status = "MLE"; // FIX: Catch heap exhaustion across C++, Java, JS, Python
-            }
-            // 3. Specific fatal signal subtypes for Runtime Errors
-            // Exit code = 128 + signal number (shell convention)
-            else if (exit_code == 139) // SIGSEGV (signal 11): null pointer, out-of-bounds access
-            {
-                status = "RE (SIGSEGV)";
-            }
-            else if (exit_code == 134) // SIGABRT (signal 6): assert failure, abort() called
-            {
-                status = "RE (SIGABRT)";
-            }
-            else if (exit_code == 136) // SIGFPE (signal 8): divide by zero, overflow
-            {
-                status = "RE (SIGFPE)";
-            }
-            // 4. Catch-all for any other Runtime Error
-            else
-            {
-                status = "RE";
+                string status = "AC";
+                if (inner_exit == 124) status = "TLE";
+                else if (inner_exit == 137) {
+                    if (inner_time < THRESHOLD_MS) status = "MLE";
+                    else status = "TLE";
+                }
+                else if (inner_exit != 0) {
+                    if (inner_exit == 125 || docker_out.find("failed to connect") != string::npos) {
+                        status = "IE";
+                        inner_time = 0;
+                    }
+                    else if (raw_out.find("std::bad_alloc") != string::npos ||
+                             raw_out.find("java.lang.OutOfMemoryError") != string::npos ||
+                             raw_out.find("MemoryError") != string::npos ||
+                             raw_out.find("heap out of memory") != string::npos) {
+                        status = "MLE";
+                    }
+                    else if (inner_exit == 139) status = "RE (SIGSEGV)";
+                    else if (inner_exit == 134) status = "RE (SIGABRT)";
+                    else if (inner_exit == 136) status = "RE (SIGFPE)";
+                    else status = "RE";
+                }
+                
+                if (!first) cout << ",";
+                first = false;
+                
+                cout << "{"
+                     << "\"status\":\"" << status << "\","
+                     << "\"time_ms\":" << inner_time << ","
+                     << "\"output\":\"" << json_escape(raw_out) << "\""
+                     << "}";
+                     
+                if (inner_exit != 0) break; // Engine stopped here
             }
         }
-
-        // --- Final Sanity Check ---
-        // If the time file parsing failed and gave a weird negative number,
-        // and it wasn't a Compilation Error, fallback to the measured wall-clock duration
-        if (status != "CE" && exec_duration < 0)
-        {
-            exec_duration = duration;
-        }
-
-        // --- JSON Response ---
-        // Output the final verdict securely to standard out so Node.js can parse it
-        cout << "{"
-             << "\"status\":\"" << status << "\","
-             << "\"time_ms\":" << exec_duration << ","
-             << "\"output\":\"" << json_escape(raw_out) << "\""
-             << "}" << endl;
+        cout << "]" << endl;
     }
     catch (...)
     {

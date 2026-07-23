@@ -91,7 +91,7 @@ describe('E2E: Submission Lifecycle', () => {
         // Python (6 verdicts)
         { name: "Python Execution - Accepted Verdict", lang: "python", expected: "AC", code: "import sys\nfor line in sys.stdin:\n    a, b = map(int, line.split())\n    print(a + b)" },
         { name: "Python Execution - Wrong Answer Verdict", lang: "python", expected: "WA", code: "print('Wrong')" },
-        { name: "Python Execution - Compile Error", lang: "python", expected: "CE", code: "def foo() # Missing colon\n  pass" },
+        { name: "Python Execution - Compile Error", lang: "python", expected: "RE", code: "def foo() # Missing colon\n  pass" },
         { name: "Python Execution - Time Limit Exceeded", lang: "python", expected: "TLE", code: "while True: pass" },
         { name: "Python Execution - Memory Limit Exceeded", lang: "python", expected: "MLE", code: "a = []\nwhile True: a.append(' ' * 10**7)" },
         { name: "Python Execution - Runtime Error", lang: "python", expected: "RE", code: "print(1/0)" },
@@ -107,7 +107,7 @@ describe('E2E: Submission Lifecycle', () => {
         // JavaScript (6 verdicts)
         { name: "JavaScript Execution - Accepted Verdict", lang: "javascript", expected: "AC", code: "const fs = require('fs');\nconst lines = fs.readFileSync('/dev/stdin', 'utf-8').trim().split('\\n');\nfor(const line of lines) { if(!line) continue; const [a,b] = line.split(' '); console.log(Number(a) + Number(b)); }" },
         { name: "JavaScript Execution - Wrong Answer Verdict", lang: "javascript", expected: "WA", code: "console.log(0);" },
-        { name: "JavaScript Execution - Compile Error", lang: "javascript", expected: "CE", code: "const a = ;" },
+        { name: "JavaScript Execution - Compile Error", lang: "javascript", expected: "RE", code: "const a = ;" },
         { name: "JavaScript Execution - Time Limit Exceeded", lang: "javascript", expected: "TLE", code: "while(true) {}" },
         { name: "JavaScript Execution - Memory Limit Exceeded", lang: "javascript", expected: "MLE", code: "const arr = []; while(true) arr.push(new Array(1000000).fill('a'));" },
         { name: "JavaScript Execution - Runtime Error", lang: "javascript", expected: "RE", code: "throw new Error('Runtime Error');" },

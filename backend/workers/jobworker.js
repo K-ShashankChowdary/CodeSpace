@@ -32,12 +32,12 @@ const redisPublisher = createClient({
 
 redisClient.on("error", (err) => console.log("Redis Client Error", err));
 
-const runCode = async (jobId, code, input, testIndex, language) => {
+const runCode = async (jobId, code, testCases, language) => {
     if (!/^[a-f0-9]+$/i.test(jobId)) {
-        return { status: "IE", output: "Invalid job ID format" };
+        return [{ status: "IE", output: "Invalid job ID format", time_ms: 0 }];
     }
 
-    const uniqueId = `${jobId}_tc${testIndex}`;
+    const uniqueId = jobId;
     const baseTempDir = process.env.TEMP_DIR || path.resolve(__dirname, "temp");
     const jobTempDir = path.join(baseTempDir, uniqueId);
 
@@ -54,15 +54,18 @@ const runCode = async (jobId, code, input, testIndex, language) => {
     else if (language === "javascript") ext = ".js";
 
     let fileName = language === "java" ? "Main.java" : `${uniqueId}${ext}`;
-    
     const filePath = path.join(jobTempDir, fileName);
-    const inputPath = path.join(jobTempDir, "input.txt"); // unified input naming
 
     await fs.promises.writeFile(filePath, code);
-    await fs.promises.writeFile(inputPath, input);
+    
+    // Write inputs for all test cases
+    for (let i = 0; i < testCases.length; i++) {
+        const inputPath = path.join(jobTempDir, `input_${i}.txt`);
+        await fs.promises.writeFile(inputPath, testCases[i].input);
+    }
 
     const enginePath = path.resolve(__dirname, "../../engine/executor");
-    const command = `${enginePath} ${uniqueId} "${jobTempDir}" ${language}`;
+    const command = `${enginePath} ${uniqueId} "${jobTempDir}" ${language} ${testCases.length}`;
 
     return new Promise((resolve) => {
         exec(command, { timeout: 30000 }, async (error, stdout, stderr) => {
@@ -72,13 +75,20 @@ const runCode = async (jobId, code, input, testIndex, language) => {
                 console.error(`[Job ${jobId}] Cleanup failed:`, cleanupErr);
             }
 
-            if (error) return resolve({ status: "RE", output: stderr || error.message });
+            if (error && stdout.trim() === "") {
+                return resolve([{ status: "RE", output: stderr || error.message, time_ms: 0 }]);
+            }
             
             try {
                 const result = JSON.parse(stdout.trim());
-                resolve(result);
+                if (!Array.isArray(result)) {
+                    // Fallback if engine output single object due to early CE
+                    resolve([result]);
+                } else {
+                    resolve(result);
+                }
             } catch (_parseError) {
-                resolve({ status: "IE", output: "Engine output malformed" });
+                resolve([{ status: "IE", output: "Engine output malformed", time_ms: 0 }]);
             }
         });
     });
@@ -97,42 +107,57 @@ const processSubmission = async (submissionStr) => {
     const allResults = [];
 
     try {
-        for (let i = 0; i < testCases.length; i++) {
-            const tc = testCases[i];
-            let result;
+        let engineResults = [];
+        if (["cpp", "c", "python", "java", "javascript"].includes(language)) {
+            engineResults = await runCode(jobId, code, testCases, language);
+        } else {
+            engineResults = [{ status: "IE", output: "Unsupported Language", time_ms: 0 }];
+        }
 
-            if (["cpp", "c", "python", "java", "javascript"].includes(language)) {
-                result = await runCode(jobId, code, tc.input, i, language);
-            } else {
-                result = { status: "IE", output: "Unsupported Language" };
-            }
-
-            let currentStatus = result.status;
-
-            if (currentStatus === "AC" && (result.time_ms || 0) > timeLimit) {
-                currentStatus = "TLE";
-            }
-            if (currentStatus === "AC" && !compareOutputsZeroAlloc(result.output, tc.output)) {
-                currentStatus = "WA";
-            }
-
-            console.log(`[Job ${jobId}] Case ${i + 1} Status: ${currentStatus} | Time: ${result.time_ms || 0}ms`);
-
+        // If a global error like CE occurred, engineResults might only have 1 item
+        if (engineResults.length === 1 && ["CE", "IE"].includes(engineResults[0].status)) {
+            finalVerdict = engineResults[0].status;
             allResults.push({
-                input: tc.input,
-                expected: tc.output,
-                actual: result.output,
-                status: currentStatus,
-                time: result.time_ms || 0
+                actual: engineResults[0].output,
+                status: engineResults[0].status,
+                time: engineResults[0].time_ms || 0
             });
+            console.log(`[Job ${jobId}] Global Error: ${finalVerdict}`);
+        } else {
+            for (let i = 0; i < testCases.length; i++) {
+                const tc = testCases[i];
+                let result = engineResults[i];
+                
+                if (!result) {
+                    result = { status: "IE", output: "Test case dropped by engine", time_ms: 0 };
+                }
 
-            if (currentStatus !== "AC") {
-                finalVerdict = currentStatus;
-                console.log(`[Job ${jobId}] Stopped execution due to: ${currentStatus}`);
-                break;
+                let currentStatus = result.status;
+
+                if (currentStatus === "AC" && (result.time_ms || 0) > timeLimit) {
+                    currentStatus = "TLE";
+                }
+                if (currentStatus === "AC" && !compareOutputsZeroAlloc(result.output, tc.output)) {
+                    currentStatus = "WA";
+                }
+
+                console.log(`[Job ${jobId}] Case ${i + 1} Status: ${currentStatus} | Time: ${result.time_ms || 0}ms`);
+
+                allResults.push({
+                    // ZERO COPY: Exclude tc.input and tc.expected to save massive amounts of memory!
+                    actual: result.output,
+                    status: currentStatus,
+                    time: result.time_ms || 0
+                });
+
+                if (currentStatus !== "AC") {
+                    finalVerdict = currentStatus;
+                    console.log(`[Job ${jobId}] Stopped execution due to: ${currentStatus}`);
+                    break;
+                }
+
+                maxTime = Math.max(maxTime, result.time_ms || 0);
             }
-
-            maxTime = Math.max(maxTime, result.time_ms || 0);
         }
 
         const jobData = {

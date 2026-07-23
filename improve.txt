@@ -1,7 +1,7 @@
 # CodeSpace — Improvement Backlog
 # Vision: Free, open-source technical interview platform (CoderPad alternative)
 # Pitch: "Run real coding interviews without paying $50/seat/month"
-# Last updated: July 8 2026
+# Last updated: July 2026
 
 =============================================================
 THE INTERVIEW PLATFORM PIVOT (CURRENT FOCUS)
@@ -10,47 +10,18 @@ THE INTERVIEW PLATFORM PIVOT (CURRENT FOCUS)
 [SOURCE CONTROL STRATEGY]
 This project is undergoing a massive architectural rewrite from V1 (Classroom) to V2 (Interview Platform).
 → `main` branch: DO NOT use for active pivot development.
-→ `v1-classroom` branch: The perfectly stable, completed Classroom app. Use this branch ONLY if a critical bug fix needs to be deployed to the legacy app or if you need to demonstrate the old app.
-→ `v2-interview-pivot` branch: **Active Development Branch**. ALL work for the EPICS below must happen on this branch. We will merge back to `main` only when the V2 MVP is 100% complete and tested.
-CodeSpace is pivoting from a 1-to-many "Classroom" tool to a 1-to-1 "Technical Interview" platform.
-To complete the MVP for the resume, the following features must be executed:
+→ `v1-classroom` branch: The perfectly stable, completed Classroom app. Use this branch ONLY if a critical bug fix needs to be deployed.
+→ `v2-interview-pivot` branch: Active Development Branch. ALL work for the EPICS below must happen on this branch.
 
-[FEAT-6] Built-in Video Call
-→ Problem: Requires a separate Zoom link.
-→ Architecture: 100% Native WebRTC P2P Video via `simple-peer`, using Socket.io for signaling and Google STUN servers for NAT traversal.
-→ Status: ✅ COMPLETED
 =============================================================
 RELIABILITY & ENGINE POLISH
 =============================================================
-
-[OPS-1] Rate limiting on execution endpoint
-→ Per-user limit: 10 runs/minute via Redis token bucket.
-→ Metric Impact: "Engineered a distributed token-bucket rate limiter using Redis to protect the C++ code execution engine from DDoS attacks and resource exhaustion, successfully capping execution requests at 10 req/min per user and ensuring 99.9% platform uptime."
-→ Status: NOT STARTED
 
 [OPS-2] Benchmarking & Monitoring CLI Module
 → Problem: Hard to measure exactly how much time/memory our engine optimizations save.
 → Architecture: Separate runner/workload architecture (Google/Atlassian style) tracking Peak Heap, CPU Time, and P99 Latency. Generates markdown reports.
 → Metric Impact: "Architected a FAANG-grade benchmarking CLI that isolates workloads to measure P99 latency and Node.js GC overhead, providing hard data for performance regressions."
 → Status: IN PROGRESS
-
-[ENGINE-3] Compile-Once, Run-Many Architecture
-→ Problem: `jobworker.js` spins up a new Docker container and triggers a full `g++`/`javac` compilation for EVERY test case, crippling CPU. Benchmark (`05_sequential_execution.js`) shows this takes 4.65 seconds for just 10 C++ test cases.
-→ Architecture: Separate compilation and execution phases. Compile binary once, mount it, and run against N test cases.
-→ Metric Impact: "Eliminated redundant Docker compilation cycles by engineering a compile-once-run-many architecture, reducing multi-testcase execution latency from 4.6s to under 1s."
-→ Status: NOT STARTED
-
-[ENGINE-4] Zero-Copy Redis Payload Serialization
-→ Problem: `jobworker.js` bundles huge `input` and `expected` strings into the final JSON payload and sends it over Redis. Benchmark (`02_redis_serialization.js`) shows this triggers a +40.8MB GC memory spike and blocks the event loop for ~92ms for large IO payloads.
-→ Architecture: Strip input/expected from the worker payload and let the frontend zip the `actual/status` response with local state.
-→ Metric Impact: "Drastically reduced backend memory allocation by 40MB per execution and reduced Redis pub/sub bandwidth by omitting static test case data from execution payloads."
-→ Status: NOT STARTED
-
-[ENGINE-5] Batch Container Execution
-→ Problem: Docker spin-up adds ~770ms per test case (`03_engine_execution.js`). Sequential execution wastes resources.
-→ Architecture: Spin up Docker once, feed it an array of inputs via standard I/O streams, and get an array of outputs back.
-→ Metric Impact: "Bypassed repetitive Docker lifecycle overhead by implementing batched execution processing, improving total evaluation throughput by 300%."
-→ Status: NOT STARTED
 
 =============================================================
 DOCUMENTATION
@@ -60,102 +31,7 @@ DOCUMENTATION
 → Update header positioning.
 → Update Architecture Diagram to show Yjs CRDT + Redis Pub/Sub.
 → Add System Design notes explaining WHY Docker cgroups, WHY exit codes over stdout, WHY Socket.io over raw WS.
-→ Status: NOT STARTED
-
-=============================================================
-TECH DEBT (Low Priority)
-=============================================================
-
-[TECH DEBT — COMPLETED]
-✅ [PERF-7] Redundant N+1 Queries on Registration
-   → Eliminated 2 extra DB calls in registerUser and loginUser by reusing
-     the in-memory Mongoose document instead of re-fetching with findById.
-✅ [CLEAN-3] findOne() Inside Loop in session.service.js
-   → Replaced read-before-write pattern (up to 5 findOne calls) with an
-     optimistic insert that retries on MongoDB E11000 duplicate key error.
-
-=============================================================
-FUTURE EXPLORATION (CoderPad Features)
-=============================================================
-- [LANG-EXT] Support for TypeScript (via tsx) and Go.
-- [LANG-DB] Support for SQL execution against an in-memory database.
-- [FEAT-PLAYBACK] Interview Playback (Keystroke History) to replay the interview after it ends.
-- [FEAT-WHITEBOARD] Integrated Whiteboard (e.g., Excalidraw) for System Design interviews.
-- [FEAT-TIMER] Interview Timer: A shared stopwatch/timer showing elapsed time since the interview started, visible to both interviewer and candidate.
-- [FEAT-HARDMODE] "Hard Mode" toggle for interviewers to disable autocomplete/syntax highlighting.
-- [FEAT-SCORECARD] Interviewer Scorecard & Notes panel for private grading and export.
-
-=============================================================
-COMPLETED ARCHIVE
-=============================================================
-✅ [ENGINE-2] Zero-Allocation Output Verification: Implemented a two-pointer string matching algorithm in Javascript to skip whitespace in-place without memory allocation.
-✅ [UI-1] Myers Diff Algorithm for Visual Output Comparison: Integrated the diff algorithm to render LeetCode-style character diffs for failed test cases in the frontend IDE.
-✅ [FEAT-RESIZABLE-IDE] Resizable IDE Panels: Implement drag-to-resize borders for the Problem Description, Code Editor, and Console panels (similar to LeetCode) to allow users to customize their workspace layout.
-✅ [FEAT-2] Session Data Model & Guest Auth Flow
-✅ [FEAT-3] UI Overhaul: Dashboard to Interview View
-✅ [FEAT-1] Collaborative Code Editor (Yjs) implemented successfully with real-time neon name tags and conflict-free cursor syncing.
-✅ [FEAT-4] Multi-language Support (C, C++, Java, Python, JavaScript) completely integrated into Executor engine and UI.
-✅ [BUG-1] Socket initialized properly on JWT rehydration.
-✅ [BUG-2] Ghost user bug fixed; logout now explicitly emits "leave-room".
-✅ [BUG-3] Execution Worker architectural decoupling correctly implemented.
-✅ [BUG-8] Missing WebSocket Error Boundaries wrapped in try/catch.
-✅ [BUG-9] Massive fix for Redis pub/sub deadlocks and nodemon temp-file infinite restarts causing dropped connections.
-✅ [PERF-1 / PERF-8] 1.5s HTTP Polling eliminated. Replaced with instant Redis Pub/Sub WebSockets (<100ms latency).
-✅ [PERF-6] Synchronous File I/O in Worker refactored to fs.promises to unblock event loop.
-✅ [UI-POLISH] Overhauled IDE Console with dynamic verdict styling, Framer Motion animations, Terminal boot-up sequence, and improved remote cursor nametags.
-✅ [TEST-1] Comprehensive testing suite (test_codes.txt) generated for AC, WA, TLE, RE, CE, MLE.
-✅ [FEAT-5] Problem Bank & Test Case Runner (Custom Problems & Interviewer Privacy Controls; External Integrations excluded per revised scope).
-✅ [FEAT-8] LeetCode Scraper Integration (GraphQL API).
-✅ [UI-POLISH] IDE safety features (Back navigation intercept), animated countdowns, and robust Custom Problem Management (Delete UI & LeetCode format cleanup).
-✅ [ENGINE-1] Specific RE subtypes: executor.cpp now maps exit 139→RE (SIGSEGV), 134→RE (SIGABRT), 136→RE (SIGFPE) instead of generic RE. All UI layers (StatusBadge, ConsolePanel, IDEHeader) updated to style and label subtypes correctly.
-✅ [FEAT-9] Dashboard Overhaul: CommandCenterTab simplified into Interview Command Center. Stats grid removed. Recent Sessions list with delete, empty-state, and one-click host flow.
-✅ [BUG-10] localColor use-before-declare crash in CodeEditor — declaration moved above handleEditorDidMount. Would have crashed the editor on mount.
-✅ [BUG-11] Own cursor shown as remote cursor in Yjs editor — isMe detection now uses customDisplayName for ALL users, not just interviewers.
-✅ [BUG-12] MultiplayerCursors pill showed login name instead of custom name — now reads sessionStorage customDisplayName before falling back to username.
-✅ [BUG-13] sync-cursor and leave-room socket events emitted by client but never handled on the server — both handlers added to socketService.js. Live cursors now work; explicit Exit triggers candidate-left immediately (not only on TCP disconnect).
-✅ [BUG-14] Dead V1 /rooms/details fallback in useWorkspaceData — removed. All room context now fetches from /sessions/details (V2 only). Old branch would crash with 404.
-✅ [BUG-15] Crash in handleCreateCustomProblem when monacoEditorRef.current is null before editor mounts — null guard added.
-✅ [BUG-16] Missing Users icon import in CommandCenterTab — restored (was used in empty-state UI but removed from import).
-✅ [BUG-17] isError check in ConsolePanel missed RE subtypes — updated to status.startsWith("RE") so SIGSEGV/SIGABRT/SIGFPE all get error styling.
-✅ [BUG-18] Stale guestToken persistence and double-loading in CodeEditor — fixed in earlier session.
-✅ [BUG-19] Unused `sessionCode` in useWorkspaceData effect dependency array causing spurious re-fetches — removed.
-✅ [BUG-20] ESLint error: `motion` imported but flagged as unused in IDE.jsx — suppressed with eslint-disable comment.
-✅ [TEST-2] End-to-end Backend API and Execution Pipeline Automated Tests created (check_db.js, test-api.js, test-execution.js) and passing. Verified 0 backend/frontend runtime bugs or errors on app startup.
-✅ [FEAT-7] Public Landing Page: Created high-conversion, responsive landing page (`/`) with modular components, glassmorphism design, and Framer Motion animations.
-✅ [FEAT-6.1] Production-grade WebRTC Refactor: Extracted useWebRTC custom hook, resolved camera memory leaks upon unmount, implemented graceful fallback UI for denied media permissions, and upgraded Framer Motion animations (layout-driven fullscreen toggling with micro-interactions).
-
-=============================================================
-NEW IDEAS: MOCK INTERVIEW PLATFORM RESEARCH
-=============================================================
-- [RESEARCH] Pramp: Bi-directional peer interviews, integrated WebRTC video/audio, Interviewer "Playbook" (hints/solutions).
-- [RESEARCH] Interviewing.io: Anonymous mock interviews, Session Replays (recording keystrokes/audio).
-- [RESEARCH] Big Interview: AI-Powered feedback on delivery and behavioral answers.
-- [RESEARCH] Google Interview Warmup: Minimalist UI, real-time transcription, AI feedback on talking points and job-specific terminology.
-
-- [PROPOSED FEAT] Integrated Video & Audio (WebRTC directly in IDE to replace external links).
-- [PROPOSED FEAT] Interviewer "Playbook" Tab in ProblemPanel (hidden from candidate, shows optimal solution and hints).
-- [PROPOSED FEAT] Solo "AI Mock Interview" Mode for candidate practice.
-- [PROPOSED FEAT] Post-Interview Feedback Flow (rubric for interviewer, self-reflection for candidate).
-- [PROPOSED FEAT] Session Replays (record Yjs document history and terminal executions for playback).
-
-=============================================================
-AUTH & ONBOARDING
-=============================================================
-
-[AUTH-1] OAuth / Social Login (Google, GitHub)
-→ Problem: Email/password signup adds friction for new interviewers.
-→ Solution: Add OAuth 2.0 via Passport.js (Google, GitHub providers).
-  - Backend: /auth/google, /auth/github strategy routes.
-  - On success: issue same JWT + refresh token pair as email flow.
-  - Frontend: "Continue with Google / GitHub" buttons on Auth page.
-→ Status: ✅ COMPLETED
-
-=============================================================
-RESUME UPLOAD & VIEWER
-=============================================================
-- [FEAT-RESUME-UPLOAD] Pre-interview Resume Upload: Prompt candidates to upload their resume (PDF) when entering the interview session.
-- [FEAT-RESUME-VIEWER] In-Interview Resume Viewer: Allow the interviewer to view the uploaded resume during the interview.
-- [FEAT-RESUME-SHARING] Shared Resume View: Provide an option for the interviewer to share the resume view with the candidate. When toggled, the resume automatically pops up on the candidate's screen as a draggable, resizable window (similar to the PiP video panel).
+→ Status: IN PROGRESS
 
 =============================================================
 MISSING FAANG-LEVEL TESTING & BOTTLENECKS
@@ -206,7 +82,6 @@ FOUNDATIONAL ARCHITECTURE HARDENING
 → Bottleneck: Express exposes X-Powered-By and lacks XSS/HSTS protections.
 → Improvement: Install and mount the Helmet middleware globally in app.js.
 
-
 =============================================================
 BACKLOGGED FEATURES: Worker Autoscaling & Load Shedding
 =============================================================
@@ -224,3 +99,66 @@ If traffic spikes so fast that even the maxed-out autoscaler cannot keep up, the
 
 ### 3. Personal Rate Limiter (Anti-Spam)
 - We will implement express-rate-limit backed by Redis to limit individual users to 10 submissions per minute.
+
+=============================================================
+FUTURE EXPLORATION (CoderPad Features)
+=============================================================
+
+- [LANG-EXT] Support for TypeScript (via tsx) and Go.
+- [LANG-DB] Support for SQL execution against an in-memory database.
+- [FEAT-PLAYBACK] Interview Playback (Keystroke History) to replay the interview after it ends.
+- [FEAT-WHITEBOARD] Integrated Whiteboard (e.g., Excalidraw) for System Design interviews.
+- [FEAT-TIMER] Interview Timer: A shared stopwatch/timer showing elapsed time since the interview started.
+- [FEAT-HARDMODE] "Hard Mode" toggle for interviewers to disable autocomplete/syntax highlighting.
+- [FEAT-SCORECARD] Interviewer Scorecard & Notes panel for private grading and export.
+- [FEAT-RESUME-UPLOAD] Pre-interview Resume Upload.
+- [FEAT-RESUME-VIEWER] In-Interview Resume Viewer.
+- [FEAT-RESUME-SHARING] Shared Resume View.
+- [RESEARCH] Mock Interview platform features (Pramp, Interviewing.io, Google Warmup).
+
+=============================================================
+COMPLETED ARCHIVE
+=============================================================
+
+### RECENTLY COMPLETED MAJOR EPICS
+
+[OPS-1] Rate limiting on execution endpoint
+→ Per-user limit: 10 runs/minute via Redis token bucket.
+→ Metric Impact: "Engineered a distributed token-bucket rate limiter using Redis to protect the C++ code execution engine from DDoS attacks and resource exhaustion, successfully capping execution requests at 10 req/min per user and ensuring 99.9% platform uptime."
+→ Status: ✅ COMPLETED
+
+[ENGINE-3] Compile-Once, Run-Many Architecture
+→ Problem: `jobworker.js` spins up a new Docker container and triggers a full `g++`/`javac` compilation for EVERY test case, crippling CPU. Benchmark (`05_sequential_execution.js`) shows this takes 4.65 seconds for just 10 C++ test cases.
+→ Architecture: Separate compilation and execution phases. Compile binary once, mount it, and run against N test cases.
+→ Metric Impact: "Eliminated redundant Docker compilation cycles by engineering a compile-once-run-many architecture, reducing multi-testcase execution latency from 4.6s to under 1s."
+→ Status: ✅ COMPLETED
+
+[ENGINE-4] Zero-Copy Redis Payload Serialization
+→ Problem: `jobworker.js` bundles huge `input` and `expected` strings into the final JSON payload and sends it over Redis. Benchmark (`02_redis_serialization.js`) shows this triggers a +40.8MB GC memory spike and blocks the event loop for ~92ms for large IO payloads.
+→ Architecture: Strip input/expected from the worker payload and let the frontend zip the `actual/status` response with local state.
+→ Metric Impact: "Drastically reduced backend memory allocation by 40MB per execution and reduced Redis pub/sub bandwidth by omitting static test case data from execution payloads."
+→ Status: ✅ COMPLETED
+
+[ENGINE-5] Batch Container Execution
+→ Problem: Docker spin-up adds ~770ms per test case (`03_engine_execution.js`). Sequential execution wastes resources.
+→ Architecture: Spin up Docker once, feed it an array of inputs via standard I/O streams, and get an array of outputs back.
+→ Metric Impact: "Bypassed repetitive Docker lifecycle overhead by implementing batched execution processing, improving total evaluation throughput by 300%."
+→ Status: ✅ COMPLETED
+
+### LEGACY COMPLETED ITEMS
+
+✅ [FEAT-6] Built-in Native WebRTC P2P Video Call (100% Native via `simple-peer`)
+✅ [AUTH-1] OAuth / Social Login (Google, GitHub via Passport.js)
+✅ [PERF-7] Redundant N+1 Queries on Registration eliminated
+✅ [CLEAN-3] session.service.js optimistic insertions
+✅ [ENGINE-2] Zero-Allocation Output Verification in JS
+✅ [UI-1] Myers Diff Algorithm for Visual Output Comparison
+✅ [FEAT-RESIZABLE-IDE] Resizable IDE Panels
+✅ [FEAT-2] Session Data Model & Guest Auth Flow
+✅ [FEAT-1] Collaborative Code Editor (Yjs) with live cursors
+✅ [FEAT-4] Multi-language Support fully integrated (C, C++, Java, Python, JS)
+✅ [PERF-1] Real-time Redis Pub/Sub WebSockets replacing 1.5s HTTP Polling
+✅ [PERF-6] Synchronous File I/O refactored to fs.promises
+✅ [ENGINE-1] Specific Runtime Errors (SIGSEGV, SIGABRT, SIGFPE mapped properly)
+✅ (And 20+ other major UI/UX polish elements, bug fixes, landing pages, and test suites)
+

@@ -355,6 +355,7 @@ function IDE() {
                   <ConsolePanel
                     output={output}
                     status={status}
+                    testCases={problem?.testCases}
                     activeTestCase={activeTestCase}
                     setActiveTestCase={setActiveTestCase}
                     isRunning={isRunning}
