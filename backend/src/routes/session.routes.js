@@ -7,7 +7,7 @@ import {
     getUserSessions,
 } from "../controllers/session.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { verifyJWTOrGuest } from "../middlewares/guestAuth.middleware.js";
+import { verifyJWTOrGuest } from "../middlewares/guest-auth.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import { createSessionSchema, guestJoinSchema } from "../validators/session.validator.js";
 

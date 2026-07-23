@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getAllProblems, getProblemById, createCustomProblem, importFromLeetCode, deleteCustomProblem } from "../controllers/problem.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { verifyJWTOrGuest } from "../middlewares/guestAuth.middleware.js";
+import { verifyJWTOrGuest } from "../middlewares/guest-auth.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import { createProblemSchema } from "../validators/problem.validator.js";
 

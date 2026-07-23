@@ -4,7 +4,7 @@ import {
     getSubmissionStatus, 
     getUserSubmissions 
 } from "../controllers/submission.controller.js";
-import { verifyJWTOrGuest } from "../middlewares/guestAuth.middleware.js";
+import { verifyJWTOrGuest } from "../middlewares/guest-auth.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import { runSubmitSchema } from "../validators/submission.validator.js";
 

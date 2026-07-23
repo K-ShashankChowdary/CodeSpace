@@ -231,5 +231,6 @@ export const initializeSockets = (httpServer) => {
     });
   });
 
+  io.redisSubscriber = subscriber;
   return io;
 };

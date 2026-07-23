@@ -15,7 +15,15 @@ export default [
         clearInterval: "readonly",
         Buffer: "readonly",
         __dirname: "readonly",
-        fetch: "readonly"
+        fetch: "readonly",
+        describe: "readonly",
+        it: "readonly",
+        expect: "readonly",
+        beforeEach: "readonly",
+        beforeAll: "readonly",
+        afterAll: "readonly",
+        jest: "readonly",
+        test: "readonly"
       }
     },
     rules: {

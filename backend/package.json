@@ -4,10 +4,34 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon --watch src src/index.js",
+    "start": "node src/index.js",
+    "dev": "nodemon -r dotenv/config --experimental-json-modules src/index.js",
+    "test": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
+    "test:unit": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest tests/unit",
+    "test:integration": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest tests/integration --runInBand --forceExit --detectOpenHandles",
+    "test:stress": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest tests/integration/stress.test.js",
+    "benchmark": "node --experimental-vm-modules tests/benchmarks/engine.bench.js",
+    "test:limit": "node scripts/find-api-limit.js",
     "worker": "node workers/jobworker.js",
     "lint": "eslint ."
+  },
+  "jest": {
+    "transform": {},
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "src/controllers/**/*.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 90,
+        "functions": 90,
+        "lines": 90,
+        "statements": 90
+      }
+    }
   },
   "keywords": [],
   "author": "",
@@ -21,6 +45,7 @@
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.1",
     "passport": "^0.7.0",
@@ -40,6 +65,9 @@
     "autocannon": "^8.0.0",
     "concurrently": "^10.0.3",
     "eslint": "^10.7.0",
-    "nodemon": "^3.0.0"
+    "jest": "^30.4.2",
+    "mitata": "^1.0.34",
+    "nodemon": "^3.0.0",
+    "supertest": "^7.2.2"
   }
 }

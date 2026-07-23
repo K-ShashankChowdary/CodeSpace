@@ -9,7 +9,7 @@ import {
   oauthCallback,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { verifyJWTOrGuest } from "../middlewares/guestAuth.middleware.js";
+import { verifyJWTOrGuest } from "../middlewares/guest-auth.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import { registerSchema, loginSchema } from "../validators/user.validator.js";
 

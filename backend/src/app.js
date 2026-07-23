@@ -4,8 +4,11 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import passport from "./config/passport.js";
+import helmet from "helmet";
 
 const app = express();
+
+app.use(helmet());
 
 // allow the React frontend to make cross-origin API requests with cookies
 app.use(cors({
@@ -36,6 +39,8 @@ import userRouter from "./routes/user.routes.js";
 import submissionRouter from "./routes/submission.routes.js";
 import problemRouter from "./routes/problem.routes.js";
 import sessionRouter from "./routes/session.routes.js";
+
+app.get("/health", (req, res) => res.status(200).send("OK"));
 
 // mount routes under versioned API paths
 app.use("/api/v1/users", userRouter);

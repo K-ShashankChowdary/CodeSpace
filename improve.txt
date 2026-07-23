@@ -156,3 +156,71 @@ RESUME UPLOAD & VIEWER
 - [FEAT-RESUME-UPLOAD] Pre-interview Resume Upload: Prompt candidates to upload their resume (PDF) when entering the interview session.
 - [FEAT-RESUME-VIEWER] In-Interview Resume Viewer: Allow the interviewer to view the uploaded resume during the interview.
 - [FEAT-RESUME-SHARING] Shared Resume View: Provide an option for the interviewer to share the resume view with the candidate. When toggled, the resume automatically pops up on the candidate's screen as a draggable, resizable window (similar to the PiP video panel).
+
+=============================================================
+MISSING FAANG-LEVEL TESTING & BOTTLENECKS
+=============================================================
+
+[QA-1] Code Coverage Enforcement
+→ Bottleneck: We don't track Code Coverage (Statement, Branch, Function, Line).
+→ Improvement: Configure Jest with `--coverage` and strictly enforce a minimum 90% coverage threshold to block bad PRs.
+
+[QA-2] CI/CD Pipeline Integration
+→ Bottleneck: Tests are run manually.
+→ Improvement: Implement a GitHub Actions workflow (`.github/workflows/test.yml`) to automatically spin up Redis/MongoDB services and run the test pyramid on every PR.
+
+[QA-3] Deep Unit Testing (Controllers & Models)
+→ Bottleneck: We tested validators and middlewares, but business logic in controllers (e.g. `submission.controller.js`) and database schema edge-cases (Mongoose constraints) lack isolated unit tests.
+→ Improvement: Mock the database and write unit tests for every controller function.
+
+[QA-4] Security Vulnerabilities (Docker Isolation Edge Cases)
+→ Bug: Code execution doesn't actively block users from attempting to read `/etc/passwd` or executing reverse shells.
+→ Bug: Fork bombs (e.g., in Python via `os.fork()`) could bypass standard limits if `nproc` is not strictly enforced on the Docker container.
+→ Improvement: Apply strictly unprivileged user constraints, drop network capabilities (`--network none`), and enforce `--pids-limit` during execution.
+
+[QA-5] WebSocket Disconnect Handling
+→ Bottleneck: Real-time WebRTC/Socket.io lacks rigorous heartbeat/disconnect logic if a peer drops mid-execution.
+→ Improvement: Implement comprehensive heartbeat (PING/PONG) logic for WebSockets and expand the test suite to simulate network partitions.
+
+[QA-6] Fuzz Testing
+→ Bottleneck: The API is only tested with predicted payloads.
+→ Improvement: Inject randomized, mutated, and malformed strings (Fuzzing) into the `code` payload to ensure the C++ engine or V8 runtime doesn't panic.
+
+=============================================================
+FOUNDATIONAL ARCHITECTURE HARDENING
+=============================================================
+
+[ARCH-1] Graceful Server Shutdown
+→ Bottleneck: Server drops all active connections instantly on termination.
+→ Improvement: Intercept SIGTERM and SIGINT to safely close the HTTP server, WebSockets, MongoDB, and Redis before exiting.
+
+[ARCH-2] Unhandled Exception & Rejection Trapping
+→ Bottleneck: Missing top-level Node.js error listeners.
+→ Improvement: Implement process.on('uncaughtException') and process.on('unhandledRejection') to log and gracefully tear down the app instead of entering zombie states.
+
+[ARCH-3] Strict Environment Variable Validation
+→ Bottleneck: Missing critical ENV vars (like MONGODB_URI) cause downstream crashes.
+→ Improvement: Add a startup validator that blocks boot-up if critical .env keys are missing.
+
+[ARCH-4] HTTP Security Headers (Helmet)
+→ Bottleneck: Express exposes X-Powered-By and lacks XSS/HSTS protections.
+→ Improvement: Install and mount the Helmet middleware globally in app.js.
+
+
+=============================================================
+BACKLOGGED FEATURES: Worker Autoscaling & Load Shedding
+=============================================================
+
+### 1. The Worker Autoscaler (Scale Up)
+We will create a new Node.js daemon (backend/workers/autoscaler.js) that monitors the Redis queue size and dynamically spawns/kills C++ execution workers.
+- Trigger: Polls LLEN submissions in Redis every 2 seconds.
+- Scale Up: If Queue Length > (Active Workers * 5), it spawns a new jobworker.js process via child_process.fork, up to a MAX_WORKERS limit.
+- Scale Down: If the queue is empty and workers are idle for 30 seconds, it gracefully kills excess workers to save RAM.
+
+### 2. Global Capacity Limiter (Server Busy)
+If traffic spikes so fast that even the maxed-out autoscaler cannot keep up, the API protects itself from queue exhaustion.
+- We will create a new middleware backend/src/middlewares/queueCapacity.middleware.js.
+- If the queue exceeds MAX_QUEUE_SIZE (e.g., 50), the API immediately aborts and returns HTTP 503.
+
+### 3. Personal Rate Limiter (Anti-Spam)
+- We will implement express-rate-limit backed by Redis to limit individual users to 10 submissions per minute.

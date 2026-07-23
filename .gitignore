@@ -46,3 +46,4 @@ node_modules/
 backend/temp/
 engine/executor
 .agents/
+backend/coverage/
