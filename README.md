@@ -141,27 +141,28 @@ CodeSpace is engineered to mitigate the inherent security and scalability risks 
 
 - **Alternatives:** Java/Spring Boot (Backend), PostgreSQL (Database).
 - **The Decision (Node.js):** The asynchronous event-driven architecture manages thousands of persistent WebSocket tunnels without the massive memory overhead of a thread-per-request model.
-- **The Decision (MongoDB):** A NoSQL document store perfectly aligns with the highly nested JSON payloads retrieved via the LeetCode GraphQL integration, completely avoiding rigid SQL migrations.
+- **Tradeoff & Mitigation:** Node.js is single-threaded and heavily penalized by CPU-bound tasks. We mitigated this by strictly decoupling the CPU-heavy compilation step to independent C++ worker nodes via a Redis message broker.
 
 ### 2. Why C++ for the Execution Worker Engine?
 
 - **Alternatives:** Node.js `child_process`, Python `subprocess`, or Go.
-- **The Decision:** C++ was chosen for three critical reasons:
-  1. **Deterministic Performance:** Unlike Go or Node.js, C++ lacks a Garbage Collector (GC). This guarantees near-zero engine overhead, ensuring that when a candidate receives a "Time Limit Exceeded" (TLE), it is strictly due to algorithmic complexity rather than the engine's GC pauses.
-  2. **Direct Kernel Access:** C++ provides native, unabstracted access to Linux POSIX system calls (`fork`, `execvp`, `setrlimit`, `wait4`). This enables the engine to enforce hard CPU and Memory limits at the OS level without slow FFI (Foreign Function Interface) bindings.
-  3. **Hardware Signal Trapping:** It directly traps raw OS-level hardware signals (e.g., `SIGSEGV` for array out-of-bounds, `SIGFPE` for divide-by-zero) and instantly maps them to accurate LeetCode-style "Runtime Errors" (RE).
+- **The Decision:** C++ guarantees deterministic execution without Garbage Collection (GC) pauses and provides direct access to Linux POSIX system calls (`fork`, `execvp`, `setrlimit`) to enforce OS-level boundaries.
+- **Tradeoff & Mitigation:** C++ requires manual memory management and platform-specific compilation. We mitigated deployment friction by statically compiling the engine binary directly into the Docker sandbox image.
 
 ### 3. Why Docker Cgroups for Isolation?
 
-- **The Decision:** Relying on application-level timeouts or language-specific sandboxes is fundamentally insecure for remote code execution. Docker's **cgroups** and namespaces enforce strict, un-bypassable kernel-level boundaries on memory limits (`--memory`) and process counts (`--pids-limit`), preventing malicious fork bombs or host-system OOM crashes.
+- **The Decision:** Relying on application-level timeouts is fundamentally insecure. Docker's **cgroups** enforce strict kernel-level boundaries on memory limits (`--memory`) preventing malicious fork bombs or OOM crashes.
+- **Tradeoff & Mitigation:** Spawning a fresh Docker container per execution inherently adds ~300ms of startup latency. We mitigated this by engineering a "compile-once, run-many" batched architecture that reuses a single container instance across all 10+ hidden test cases.
 
 ### 4. Why Exit Codes over Standard Output (Stdout)?
 
-- **The Decision:** Parsing `stdout` for test case verification is extremely dangerous. A malicious candidate could simply execute `print("Accepted")` or `print("Correct")` to easily trick the execution engine. By communicating verdicts via strictly controlled POSIX **exit codes** (e.g., `0` for AC, `139` for SIGSEGV, `137` for OOM), the execution pipeline is completely immune to output-spoofing attacks.
+- **The Decision:** Parsing `stdout` for test case verification is dangerous; a malicious candidate could simply execute `print("Accepted")`. Communicating via POSIX **exit codes** (e.g., `0` for AC, `139` for SIGSEGV) makes the engine immune to output-spoofing.
+- **Tradeoff & Mitigation:** Exit codes alone don't provide granular stack traces for candidates. We mitigate this by securely parsing `stderr` *only* if a non-zero exit code is trapped by the engine.
 
 ### 5. Why WebRTC instead of WebSockets for Video?
 
-- **The Decision:** WebSockets use TCP, where packet loss causes head-of-line blocking (latency spikes). WebRTC utilizes **UDP/RTP**, allowing packet loss without halting the stream, resulting in smooth, sub-50ms latency. The **P2P mesh** eliminates server bandwidth costs entirely.
+- **The Decision:** WebSockets use TCP, where packet loss causes head-of-line blocking. WebRTC utilizes **UDP/RTP**, allowing packet loss without halting the stream, resulting in smooth, sub-50ms latency while bypassing server bandwidth costs via P2P mesh.
+- **Tradeoff & Mitigation:** WebRTC UDP traffic is frequently blocked by strict corporate firewalls and symmetric NATs. The architecture utilizes Google STUN servers for NAT traversal, with the architectural runway to implement TURN servers as a TCP fallback if needed.
 
 ### 6. Why WebSockets for Execution Verdicts?
 
