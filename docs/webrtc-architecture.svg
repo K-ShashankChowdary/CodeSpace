@@ -1,0 +1,55 @@
+<svg viewBox="0 0 1000 460" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrowB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrowP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="460" fill="#ffffff"/>
+
+<text x="500" y="32" text-anchor="middle" font-size="19" font-weight="700" fill="#0f172a">Real-Time Collaboration &amp; WebRTC Signaling</text>
+
+  <!-- Client A -->
+  <rect x="30" y="90" width="170" height="70" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="115" y="120" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">Client A</text>
+  <text x="115" y="138" text-anchor="middle" font-size="10.5" fill="#3b5578">Monaco + Yjs doc</text>
+
+  <!-- Client B -->
+  <rect x="800" y="90" width="170" height="70" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="885" y="120" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">Client B</text>
+  <text x="885" y="138" text-anchor="middle" font-size="10.5" fill="#3b5578">Monaco + Yjs doc</text>
+
+  <!-- Node API signaling -->
+  <rect x="415" y="90" width="170" height="80" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="500" y="118" text-anchor="middle" font-size="14" font-weight="700" fill="#15803d">Node.js API</text>
+  <text x="500" y="136" text-anchor="middle" font-size="10.5" fill="#3f6b4a">Signaling only</text>
+  <text x="500" y="152" text-anchor="middle" font-size="10" fill="#3f6b4a">SDP / ICE relay</text>
+
+  <!-- Code sync lane -->
+  <line x1="200" y1="115" x2="413" y2="115" stroke="#475569" stroke-width="2" marker-end="url(#arrowB)"/>
+  <line x1="798" y1="115" x2="587" y2="115" stroke="#475569" stroke-width="2" marker-end="url(#arrowB)"/>
+  <text x="500" y="70" text-anchor="middle" font-size="12" font-weight="600" fill="#334155">Code Sync &#8212; WebSocket + Yjs CRDT deltas</text>
+
+  <!-- STUN server -->
+  <rect x="415" y="215" width="170" height="65" rx="10" fill="#fefce8" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="500" y="240" text-anchor="middle" font-size="13" font-weight="700" fill="#a16207">Google STUN</text>
+  <text x="500" y="257" text-anchor="middle" font-size="10" fill="#8a7440">NAT traversal only</text>
+
+  <line x1="200" y1="170" x2="440" y2="228" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <line x1="798" y1="170" x2="560" y2="228" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="290" y="205" text-anchor="middle" font-size="9.5" fill="#64748b">ICE candidate discovery</text>
+  <text x="705" y="205" text-anchor="middle" font-size="9.5" fill="#64748b">ICE candidate discovery</text>
+
+  <!-- P2P mesh -->
+  <path d="M 115 165 Q 500 360 885 165" fill="none" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arrowP)"/>
+  <text x="500" y="345" text-anchor="middle" font-size="12" font-weight="700" fill="#6d28d9">Direct P2P UDP/RTP Media Mesh (audio + video)</text>
+  <text x="500" y="362" text-anchor="middle" font-size="10" fill="#7c3aed">Bypasses the server entirely &#8212; zero video bandwidth cost, sub-50ms latency</text>
+
+  <!-- bottom notes -->
+  <rect x="30" y="390" width="940" height="55" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="50" y="413" font-size="11" fill="#475569">Yjs merges concurrent keystrokes without server-side conflict resolution. The API's only job in the media path is SDP/ICE exchange &#8212;</text>
+  <text x="50" y="430" font-size="11" fill="#475569">once candidates connect, video/audio never touch the server, unlike the TCP-based, head-of-line-blocked WebSocket approach.</text>
+</svg>
