@@ -108,6 +108,39 @@ Used by the client to listen for asynchronous execution results.
 }
 ```
 
+### 3. Verdict Polling (REST Fallback)
+
+Used if WebSockets drop or are blocked by corporate proxies.
+**`GET /api/submissions/status/:id`**
+
+```json
+// Response (200 OK)
+{
+  "status": "COMPLETED",
+  "verdict": "WA",
+  "passedCases": 8,
+  "totalCases": 10
+}
+```
+
+### 4. Automated Problem Ingestion
+
+Dynamically parses LeetCode problems directly into the database.
+**`POST /api/problems/leetcode`**
+
+```json
+// Request Payload
+{
+  "url": "https://leetcode.com/problems/two-sum/"
+}
+// Response (201 Created)
+{
+  "title": "Two Sum",
+  "difficulty": "Easy",
+  "testCases": [...]
+}
+```
+
 ---
 
 ## System Architecture & Data Flow
