@@ -240,28 +240,47 @@ function compareOutputsZeroAlloc(actual, expected) {
     return true;
 }
 
+let isShuttingDown = false;
+
+process.on("message", (msg) => {
+    if (msg.cmd === "shutdown") {
+        console.log(`[Worker ${process.pid}] Received shutdown signal. Will exit after current job...`);
+        isShuttingDown = true;
+    }
+});
+
 const startWorker = async () => {
     try {
         await redisClient.connect();
         await redisPublisher.connect();
-        console.log("⚡ Worker connected to Redis.");
+        console.log(`⚡ [Worker ${process.pid}] connected to Redis.`);
         
         if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI missing");
         await mongoose.connect(process.env.MONGODB_URI);
-        console.log("💾 Worker connected to Mongo.");
+        console.log(`💾 [Worker ${process.pid}] connected to Mongo.`);
 
-        while (true) {
+        while (!isShuttingDown) {
             try {
-                const submission = await redisClient.brPop("submissions", 5);
+                // Poll Redis for a job. Block for 2 seconds.
+                // If it returns null (timeout), the loop restarts and checks isShuttingDown.
+                const submission = await redisClient.brPop("submissions", 2);
                 if (submission) {
                     await processSubmission(submission.element);
                 }
             } catch (err) {
-                console.error("Worker Loop Error:", err);
+                console.error(`[Worker ${process.pid}] Loop Error:`, err);
             }
         }
+        
+        console.log(`[Worker ${process.pid}] Shutting down cleanly.`);
+        await redisClient.quit();
+        await redisPublisher.quit();
+        await mongoose.disconnect();
+        process.exit(0);
+
     } catch (err) {
-        console.error("Critical Start Failure:", err);
+        console.error(`[Worker ${process.pid}] Critical Start Failure:`, err);
+        process.exit(1);
     }
 };
 

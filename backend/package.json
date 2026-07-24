@@ -12,7 +12,7 @@
     "test:stress": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest tests/integration/stress.test.js",
     "benchmark": "node --experimental-vm-modules tests/benchmarks/engine.bench.js",
     "test:limit": "node scripts/find-api-limit.js",
-    "worker": "node workers/jobworker.js",
+    "worker": "node workers/autoscaler.js",
     "lint": "eslint ."
   },
   "jest": {
