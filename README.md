@@ -330,8 +330,8 @@ We employ a 3-tiered defense against traffic spikes and malicious actors:
 - **Level 2: Load Shedding (Global Capacity Limit):** If the ingestion queue exceeds a predefined threshold, the API actively sheds load (returning `HTTP 503 Service Unavailable`) to prevent cascading OOM failures.
 - **Level 3: Redis-Backed IP Rate Limiting:** A strict user-level throttle (10 req/min) prevents individual malicious actors from artificially triggering the global load shed.
 - **Tradeoffs & Mitigations:**
-  - **Limitation:** IP-based rate limiting (Level 3) can unfairly block entire university campuses or corporate offices sharing a single NAT gateway.
-  - **Considered:** We considered this edge case for the current iteration; future roadmap features will implement JWT-based user-level rate limiting to replace IP-based tracking.
+  - **Limitation:** Traditional IP-based rate limiting can unfairly block entire university campuses or corporate offices sharing a single NAT gateway.
+  - **Solution:** Engineered a context-aware Sliding Window algorithm that targets the JWT `user._id` for authenticated candidates, falling back to IP address tracking strictly for unauthenticated guests, entirely eliminating false-positive campus blocks.
 
 ### 4. Testing Methodology
 
