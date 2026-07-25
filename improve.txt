@@ -66,28 +66,9 @@ MISSING FAANG-LEVEL TESTING & BOTTLENECKS
 FOUNDATIONAL ARCHITECTURE HARDENING
 =============================================================
 
-
-
-[ARCH-2] Unhandled Exception & Rejection Trapping
-→ Bottleneck: Missing top-level Node.js error listeners.
-→ Improvement: Implement process.on('uncaughtException') and process.on('unhandledRejection') to log and gracefully tear down the app instead of entering zombie states.
-
-[ARCH-3] Strict Environment Variable Validation
-→ Bottleneck: Missing critical ENV vars (like MONGODB_URI) cause downstream crashes.
-→ Improvement: Add a startup validator that blocks boot-up if critical .env keys are missing.
-
-[ARCH-4] HTTP Security Headers (Helmet)
-→ Bottleneck: Express exposes X-Powered-By and lacks XSS/HSTS protections.
-→ Improvement: Install and mount the Helmet middleware globally in app.js.
-
 =============================================================
 BACKLOGGED FEATURES: Load Shedding & Limits
 =============================================================
-
-### 1. Global Capacity Limiter (Server Busy)
-If traffic spikes so fast that even the maxed-out autoscaler cannot keep up, the API protects itself from queue exhaustion.
-- We will create a new middleware backend/src/middlewares/queueCapacity.middleware.js.
-- If the queue exceeds MAX_QUEUE_SIZE (e.g., 50), the API immediately aborts and returns HTTP 503.
 
 ### 2. Personal Rate Limiter (Anti-Spam)
 - We will implement express-rate-limit backed by Redis to limit individual users to 10 submissions per minute.
@@ -114,6 +95,27 @@ COMPLETED ARCHIVE
 =============================================================
 
 ### RECENTLY COMPLETED MAJOR EPICS
+
+[ARCH-2] Unhandled Exception & Rejection Trapping
+→ Problem: Unhandled Promise rejections and uncaught exceptions caused the Node process to enter zombie states.
+→ Architecture: Implemented global process listeners to log errors and force a graceful teardown via process.exit(1).
+→ Status: ✅ COMPLETED
+
+[ARCH-3] Strict Environment Variable Validation
+→ Problem: Missing critical ENV vars (like MONGODB_URI) caused downstream crashes late in the boot cycle.
+→ Architecture: Implemented a Zod schema validator during startup to instantly abort boot up if required variables are missing.
+→ Status: ✅ COMPLETED
+
+[ARCH-4] HTTP Security Headers (Helmet)
+→ Problem: Express exposed identifying server signatures and lacked basic XSS protections.
+→ Architecture: Mounted the Helmet middleware globally in app.js.
+→ Status: ✅ COMPLETED
+
+[OPS-3] Global Capacity Limiter (Server Busy)
+→ Problem: Traffic spikes exceeding autoscaler capacity could cause unbounded Redis queue growth and memory exhaustion.
+→ Architecture: Engineered `queueCapacity.middleware.js` to poll the Redis queue depth. If depth exceeds `MAX_QUEUE_SIZE` (default 500), execution requests are short-circuited with an HTTP 503 Service Unavailable, enforcing strict load-shedding.
+→ Metric Impact: "Protected the execution engine from unbounded queue memory exhaustion by engineering a Global Capacity Limiter middleware, dropping excess executions with HTTP 503 backpressure when Redis depth exceeds 500 active jobs."
+→ Status: ✅ COMPLETED
 
 [ARCH-1] Graceful Server Shutdown
 → Problem: Server and background workers dropped active connections (WebSocket/Redis) instantly on termination, leading to suspended CRDT syncs and zombie Redis jobs.
