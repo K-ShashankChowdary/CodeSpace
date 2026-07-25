@@ -93,6 +93,7 @@ export const useCodeExecution = (problemId, activeRoomCode, currentUser, isInter
     } catch (err) {
       console.error("Execution error:", err);
       setStatus("Error");
+      setOutput(err.response?.data?.message || "Failed to connect to the execution engine.");
       setIsRunning(false);
       setIsSubmitting(false);
     }
