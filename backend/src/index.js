@@ -37,6 +37,8 @@ process.on("unhandledRejection", (err) => {
 });
 
 let httpServer;
+let io;
+let wss;
 
 const startServer = async () => {
     try {
@@ -47,10 +49,10 @@ const startServer = async () => {
         httpServer = createServer(app);
 
         // Initialize WebSockets (Socket.io for chat/execution/rooms)
-        initializeSockets(httpServer);
+        io = initializeSockets(httpServer);
 
         // Initialize native WebSocket server for Yjs (CRDT collaborative editor)
-        const wss = new WebSocketServer({ noServer: true });
+        wss = new WebSocketServer({ noServer: true });
         
         httpServer.on("upgrade", (request, socket, head) => {
             if (request.url.startsWith("/yjs")) {
@@ -82,7 +84,30 @@ startServer();
 // Graceful Server Shutdown
 const shutdown = async (signal) => {
     console.log(`\n🛑 Received ${signal}. Shutting down gracefully...`);
+    
+    // Failsafe timeout: if shutdown takes longer than 10 seconds, forcefully exit
+    const failsafe = setTimeout(() => {
+        console.error("Forcefully shutting down due to timeout...");
+        process.exit(1);
+    }, 10000);
+
     try {
+        if (wss) {
+            console.log("Closing Yjs WebSockets...");
+            for (const ws of wss.clients) {
+                ws.terminate();
+            }
+            wss.close();
+        }
+
+        if (io) {
+            console.log("Closing Socket.io connections...");
+            if (io.redisSubscriber) {
+                await io.redisSubscriber.quit();
+            }
+            io.close();
+        }
+
         if (httpServer) {
             httpServer.close(() => console.log("HTTP server closed."));
         }
@@ -93,9 +118,12 @@ const shutdown = async (signal) => {
             await redisClient.quit();
             console.log("Redis connection closed.");
         }
+        
+        clearTimeout(failsafe);
         process.exit(0);
     } catch (err) {
         console.error("Error during shutdown:", err);
+        clearTimeout(failsafe);
         process.exit(1);
     }
 };

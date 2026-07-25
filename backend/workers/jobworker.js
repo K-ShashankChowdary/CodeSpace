@@ -242,12 +242,19 @@ function compareOutputsZeroAlloc(actual, expected) {
 
 let isShuttingDown = false;
 
+const shutdownHandler = (signal) => {
+    console.log(`\n[Worker ${process.pid}] Received ${signal}. Will exit after current job...`);
+    isShuttingDown = true;
+};
+
 process.on("message", (msg) => {
     if (msg.cmd === "shutdown") {
-        console.log(`[Worker ${process.pid}] Received shutdown signal. Will exit after current job...`);
-        isShuttingDown = true;
+        shutdownHandler("IPC shutdown");
     }
 });
+
+process.on("SIGINT", () => shutdownHandler("SIGINT"));
+process.on("SIGTERM", () => shutdownHandler("SIGTERM"));
 
 const startWorker = async () => {
     try {
